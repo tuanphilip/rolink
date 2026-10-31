@@ -1,0 +1,13 @@
+pre-commit:
+  jobs:
+    # The only hook job left: it repairs instead of complaining, which is the
+    # one thing worth spending commit time on. Everything that only reports
+    # (lint, react-doctor) runs in CI, where nobody can pass --no-verify.
+    #
+    # bun fmt picks the staged files itself, skips what .oxfmtrc.json ignores
+    # (so a commit touching only a skill file passes), and stages what it
+    # fixed. A file with both staged and unstaged changes stops the commit
+    # rather than getting its unstaged lines swept in: stage the rest, or
+    # `git stash --keep-index`, and commit again.
+    - name: format
+      run: bun fmt --staged

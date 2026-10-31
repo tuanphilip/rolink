@@ -1,0 +1,53 @@
+# React Doctor — finds security, performance, correctness, accessibility,
+# bundle-size, and architecture issues in React codebases.
+#
+# Docs: https://www.react.doctor/ci
+# Source: https://github.com/millionco/react-doctor
+
+name: React Doctor
+
+on:
+  # Scans the PR's changed files and posts a sticky summary comment listing only the new issues introduced relative to the merge base of the target branch.
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # Scans `main` on every push to track the health-score trend and catch regressions that slipped past PR review.
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+
+# Cancels any in-flight scan for the same PR (or branch, on push) the moment a new commit arrives, so reviewers only ever see the latest run.
+concurrency:
+  group: react-doctor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  react-doctor:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 gives React Doctor the full git history it needs to find the merge base with the target branch. Without it a shallow checkout has no merge base, so PR runs can't compare against the base and fall back to reporting every issue in the changed files (pre-existing ones included) instead of only the ones the PR introduced.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: millionco/react-doctor@v2
+        # Blocking here, and nowhere else. This used to be advisory while the
+        # pre-commit hook blocked on warnings, which put the strict gate on the
+        # side you can skip with --no-verify and the loose one on the side you
+        # cannot. The hook now only formats.
+        #
+        # "warning" fails on any new finding, matching what the hook enforced.
+        # It still scans changed files against the merge base, so inherited
+        # findings do not red-X a PR.
+        # Full reference: https://www.react.doctor/ci
+        with:
+          blocking: warning
+          # scope: full            # On PRs, scan the whole project, not just changed files
+          # comment: false         # Drop the sticky PR summary comment
+          # review-comments: false # Drop inline review comments on changed lines
+          # commit-status: false   # Drop the commit status (score, counts, run link)
+          # version: "0.4.0"       # Pin a version instead of "latest"

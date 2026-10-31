@@ -1,0 +1,237 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 gives fallow the full git history it needs to diff
+      # against origin/main (see the fallow step below); a shallow checkout
+      # has no origin/main ref to compare against.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node_modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build Worker and prerender public pages
+        run: bun run build
+      - name: Format, lint, typecheck
+        run: |
+          bun run format:check
+          bun run lint
+          bun run check
+      # Scoped to what this branch changed, gated against
+      # fallow-baselines/health.json: fails only on findings the branch
+      # introduced, not inherited debt. See AGENTS.md.
+      - name: Fallow audit
+        run: bun run fallow
+      # Prose health for the docs this branch touched (AGENTS.md, README,
+      # docs/**). Default --blocking error: the strong LLM tells and
+      # filler openers fail CI; passive-voice and hedge words stay
+      # advisory. Generated and vendored files are excluded in
+      # .style-doctor.json.
+      - name: Style Doctor
+        run: bun run style
+
+  # Three suites, three jobs: run one after another they took 3 to 5
+  # minutes, which becomes the wall time once the browser shards are short.
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [test, "test:worker", "test:worker:self-host"]
+    name: unit (${{ matrix.suite }})
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node_modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      # No .dev.vars step: vitest.config.ts binds .dev.vars.local.example's
+      # values itself, so CI and every checkout run the same secrets.
+      - name: bun run ${{ matrix.suite }}
+        run: bun run ${{ matrix.suite }}
+
+  # The build a fork deploys (no VITE_RDYRCT_SITE): opens on the app, serves
+  # none of rdyrct.com's pages, and carries none of its head tags or
+  # analytics. Its own job because it needs its own build of dist/.
+  self-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node_modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      # No .dev.vars step: the config brings its own (.dev.vars.self-host).
+      - name: Self-hosted build, in a browser
+        run: bun run e2e:self-host
+
+  # The rdyrct.com build under `vite preview`, where the real CSP applies.
+  # Its own job, built once, instead of a build on every e2e shard: the
+  # shards test `vite dev` and never used it.
+  production:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node_modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      # No .dev.vars or .env step: the config brings its own
+      # (.dev.vars.playwright, BUILD_ENV).
+      - name: Production build, in a browser
+        run: bun run e2e:production
+      - name: Upload traces and report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-production
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  e2e:
+    runs-on: ubuntu-latest
+    # pull-requests: write lets leanest post its selection report as a PR
+    # comment. Job-level permissions replace the workflow's, so contents:
+    # read is repeated here.
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each shard runs the spec files tests/e2e/shards.ts gives it,
+        # balanced on tests/e2e/shard-times.json, so the slowest shard (the
+        # wall time) is close to the average. Free on a public repo.
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      # fetch-depth: 0 so leanest can diff against the PR base (or the
+      # previous commit on push).
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node_modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      # No .dev.vars or .env step: playwright.config.ts sets the worker's
+      # values (.dev.vars.playwright) and the build's (BUILD_ENV, with the
+      # placeholder PostHog token) itself, so a local run and CI match.
+      # On a PR, leanest runs only the specs this diff could affect and hands
+      # them to playwright unchanged. It fails open: a judge error or a
+      # low-confidence answer runs the full suite, and so does any change to
+      # runner setup (package.json, bun.lock, .github/workflows/). The default provider
+      # (classifier.dev) sees the diff and the spec sources; the repo is
+      # public, so that's fine. Each shard selects on its own, so a spec can
+      # slip through on a PR; main runs the full suite to catch it.
+      # E2E_SHARD, not --shard: the config narrows to this shard's files, and
+      # leanest's selection narrows within them. A shard none of the selected
+      # specs live in has nothing to run, which is a pass on a PR; the full
+      # run on main never passes that flag, so an empty shard fails there. Only shard 1 posts
+      # leanest's comment: without --shard in args, every shard would.
+      - name: Browser smoke test, affected specs (shard ${{ matrix.shard }}/6)
+        if: github.event_name == 'pull_request'
+        uses: baronunread/leanest@v0.2.7
+        env:
+          E2E_SHARD: ${{ matrix.shard }}/6
+        with:
+          framework: playwright
+          args: --pass-with-no-tests
+          comment: ${{ matrix.shard == 1 }}
+      - name: Browser smoke test, full suite (shard ${{ matrix.shard }}/6)
+        if: github.event_name != 'pull_request'
+        env:
+          E2E_SHARD: ${{ matrix.shard }}/6
+        run: bunx playwright test
+      # A red run is debugged from its traces (trace: retain-on-failure) and
+      # the HTML report, which otherwise die with the runner.
+      - name: Upload traces and report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-shard-${{ matrix.shard }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+      # Every shard's durations, red or green, for refreshing
+      # tests/e2e/shard-times.json: bun scripts/e2e-shard-times.ts
+      - name: Upload timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-timings-${{ matrix.shard }}
+          path: e2e-timings/report.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  observability:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Gate worker wide-event coverage, annotate regressions, and keep one
+      # up-to-date PR report. Match the locally pinned CLI so score changes
+      # only when this repository updates @evlog/cli.
+      - name: evlog map score gate
+        uses: evloghq/action@9e0020fc8f3e60bb63121ee0008b41229d77f809
+        with:
+          version: 0.9.0
+          min-score: "100"
+          comment: on-failure
+          telemetry: false

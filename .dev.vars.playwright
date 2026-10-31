@@ -1,0 +1,35 @@
+BETTER_AUTH_SECRET=playwright-only-secret-with-32-characters
+SUPERADMIN_EMAIL=playwright-admin@example.com
+APP_URL=http://localhost:5174
+APP_HOST=localhost:5174
+SHARED_LINK_HOST=rdyr.cc
+
+RESEND_API_KEY=re_local_emulated
+RESEND_BASE_URL=http://localhost:4000
+MAIL_FROM=rdyrct <no-reply@localhost>
+
+POLAR_ACCESS_TOKEN=playwright_polar_token
+POLAR_WEBHOOK_SECRET=playwright_webhook_secret
+POLAR_PRO_PRODUCT_ID=playwright_pro_product
+POLAR_HOBBY_PRODUCT_ID=playwright_hobby_product
+POLAR_SERVER=sandbox
+
+CF_API_TOKEN=
+CF_ZONE_ID=
+# "instant", not "1": the e2e suite asserts a domain reaches active, so the
+# staged DNS/TLS delays local dev shows off are only a timer to race.
+CF_DEV_ENV=instant
+
+# Cloudflare Turnstile (#304), with Cloudflare's always-pass test keys. Set
+# here, not just in .dev.vars, because this is the file the browser suite
+# actually reads: CLOUDFLARE_ENV=playwright makes wrangler prefer it, so keys
+# only in .dev.vars leave every e2e signup running the disabled path while
+# looking like it covers the real one.
+TURNSTILE_SITE_KEY=1x00000000000000000000AA
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+
+# Google sign-in. The local emulate google service, started by the resend
+# webServer in playwright.config.ts (resend on 4000, google on 4001).
+GOOGLE_CLIENT_ID=test-client
+GOOGLE_CLIENT_SECRET=test-secret
+GOOGLE_EMULATOR_URL=http://localhost:4001

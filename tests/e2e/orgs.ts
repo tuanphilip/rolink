@@ -1,0 +1,110 @@
+import { queryRows } from "./db";
+import { expect, type Browser, type Page } from "@playwright/test";
+import { signUpAndVerify } from "./resend";
+
+const E2E_PASSWORD = "test-password-123";
+
+/** Follows a short link once, without following the redirect, and checks it
+ * sends the visitor to `destination`. */
+export async function expectRedirect(page: Page, slug: string, destination: string) {
+  const res = await page.request.get(`/${slug}`, { maxRedirects: 0 });
+  expect(res.status()).toBe(302);
+  expect(res.headers()["location"]).toBe(destination);
+}
+
+/** Opens the org switcher and creates another org under the same signed-in
+ * account, for tests that share one user (see link-addresses.pw.ts) and so
+ * have already left the no-org state behind by the time they need this.
+ * Waits for the switch to settle, for the same reason as createOrg above. */
+export async function createAdditionalOrg(page: Page, name: string) {
+  await page.getByTitle("Switch organization").click();
+  await page.getByRole("menuitem", { name: "New organization" }).click();
+  const dialog = page.getByRole("dialog", { name: "New organization" });
+  await dialog.getByLabel("Name").fill(name);
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByTitle("Switch organization")).toHaveText(name);
+}
+
+/** Adds a custom domain from the Domains page and returns its hostname.
+ * Does not wait for activation: callers that need "active" (DNS+TLS have
+ * resolved against the fake Cloudflare backend) poll for that themselves,
+ * since how long they're willing to wait varies by test. */
+export async function addCustomDomain(page: Page, hostname = `e2e-${Date.now()}.example.com`) {
+  await page.goto("/domains");
+  await page.getByPlaceholder("links.example.com").fill(hostname);
+  await page.getByRole("button", { name: "Add domain" }).click();
+  return hostname;
+}
+
+/** Adds a custom domain and waits for it to serve, for the tests that need a
+ * working custom address rather than the act of adding one. The playwright
+ * env reports DNS and TLS ready immediately (CF_DEV_ENV "instant"), so this
+ * waits on one probe-ramp sleep plus a domains poll, not on the staged delays
+ * local dev uses. Callers should mark themselves `test.slow()`: this alone can
+ * take most of the default budget. */
+export async function addActiveCustomDomain(page: Page, hostname?: string) {
+  const added = await addCustomDomain(page, hostname);
+  await expect(page.getByText("active", { exact: true })).toBeVisible({ timeout: 30_000 });
+  return added;
+}
+
+/** Opens the Links page's "New link" dialog and returns it. */
+export async function openNewLinkDialog(page: Page) {
+  await page.goto("/links");
+  await page.getByRole("button", { name: "New link" }).first().click();
+  return page.getByRole("dialog", { name: "New link" });
+}
+
+/** Fills the dashboard's quick-create field and submits it, waiting for the
+ * confirmation dialog. The first thing a signed-in test does, since an
+ * account starts with an organization and no links. */
+export async function createQuickLink(page: Page, destination: string) {
+  const field = page.getByPlaceholder("https://example.com/launch").first();
+  await expect(field).toBeVisible();
+  await field.fill(destination);
+  await page.getByRole("button", { name: "Create link" }).click();
+  await expect(page.getByRole("dialog", { name: "Link created" })).toBeVisible();
+}
+
+/**
+ * Signs up an owner, creates a link invite from Members, and returns the
+ * owner's address with the token behind it.
+ *
+ * The token is read back scoped to this owner, not as "the newest invite":
+ * the suite runs in parallel shards against one database, so the globally
+ * newest row belongs to whichever test wrote last.
+ */
+export async function ownerWithInviteLink(
+  page: Page,
+  prefix: string,
+  /** Runs on the fresh dashboard, before the page leaves for Members: a
+   * caller that needs the org to hold something has one chance to put it
+   * there while the quick-create field is on screen. */
+  seed?: (page: Page) => Promise<void>,
+) {
+  const owner = `${prefix}-${Date.now()}@gmail.com`;
+  await signUpAndVerify(page, owner, E2E_PASSWORD);
+  await seed?.(page);
+
+  await page.goto("/members");
+  await page.getByRole("button", { name: "Invite link" }).click();
+  await page.getByRole("button", { name: "Create invite link" }).click();
+  await expect(page.getByText("Pending invites")).toBeVisible();
+
+  const [invite] = await queryRows<{ token: string }>(
+    page,
+    "select token from invites where created_by = (select id from user where email = ?)",
+    [owner],
+  );
+  expect(invite?.token).toBeTruthy();
+  return { owner, token: invite.token };
+}
+
+/** A separate signed-up account in its own browser context, for the half of
+ * an invite flow the owner cannot play. */
+export async function guestAccount(browser: Browser, prefix: string) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await signUpAndVerify(page, `${prefix}-${Date.now()}@gmail.com`, E2E_PASSWORD);
+  return { context, page };
+}

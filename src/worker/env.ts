@@ -1,0 +1,124 @@
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import type * as schema from "./db/schema";
+import type { StorageMessage } from "./storage";
+import type { ClickBuffer } from "./click-buffer";
+import type { BillingProvider } from "./billing-provider";
+import type { AuditableLogger } from "evlog";
+import type { OrgPlan } from "@/shared/types";
+
+export interface Env {
+  DB: D1Database;
+  LINKS: KVNamespace;
+  MEDIA: R2Bucket;
+  ASSETS: Fetcher;
+
+  /* storage recovery: KV/R2 follow-up work and the org-teardown workflow */
+  STORAGE_QUEUE: Queue<StorageMessage>;
+  ORG_DELETE: Workflow<{ orgId: string }>;
+  /* custom-domain activation as a durable background workflow */
+  DOMAIN_ACTIVATE: Workflow<{ domainId: string; hostname: string }>;
+  LINK_IMPORT: Workflow<{ importId: string }>;
+  /* click ingestion: redirects buffer here instead of writing D1 directly
+     (#225), one instance, flushed to D1 on a ~10 s alarm */
+  CLICK_BUFFER: DurableObjectNamespace<ClickBuffer>;
+  RL_AUTH_PUBLIC: RateLimit;
+  RL_EMAIL: RateLimit;
+  RL_EMAIL_RECIPIENT: RateLimit;
+  RL_WRITE_FREE: RateLimit;
+  RL_WRITE_PAID: RateLimit;
+  RL_QR_UPLOAD: RateLimit;
+  RL_DOMAIN_SETUP: RateLimit;
+  RL_BILLING: RateLimit;
+  RL_CLICK_RECORDING: RateLimit;
+  /* the landing page's anonymous shortener (Direction A of #96) */
+  RL_ANON_LINK: RateLimit;
+
+  /* auth + email (secrets unless noted) */
+  BETTER_AUTH_SECRET: string;
+  SUPERADMIN_EMAIL: string;
+  RESEND_API_KEY?: string; // unset: no email goes out and sign-up skips verification
+  MAIL_FROM: string; // var, e.g. "me <no-reply@mail.rdyrct.com>"
+  // var, e.g. "Andrea at rdyrct <andrea@mail.rdyrct.com>". The sender of the
+  // founder's welcome email. Unset, no welcome is sent: its text is written in
+  // one person's voice, which a self-hosted instance has no right to borrow.
+  WELCOME_FROM?: string;
+  APP_URL: string; // var, e.g. "https://rdyrct.com"; SPA/API origin
+  RESEND_BASE_URL?: string; // var; dev points at the emulate.dev Resend emulator
+
+  /* Google OAuth (generic OAuth2 provider). clientSecret is a secret; the
+     emulator URL is a var and only set in dev to redirect the flow at emulate. */
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_EMULATOR_URL?: string;
+
+  /* billing (Polar) */
+  POLAR_ACCESS_TOKEN?: string;
+  POLAR_WEBHOOK_SECRET?: string;
+  POLAR_PRO_PRODUCT_ID?: string; // var, monthly
+  POLAR_HOBBY_PRODUCT_ID?: string; // var, monthly
+  POLAR_PRO_YEARLY_PRODUCT_ID?: string; // var, yearly (10% off)
+  POLAR_HOBBY_YEARLY_PRODUCT_ID?: string; // var, yearly (10% off)
+  POLAR_SERVER?: "sandbox" | "production"; // var, default sandbox
+  /* the checkout/portal client, injected by tests; unset everywhere else,
+     where the routes build a real Polar client from the token above */
+  BILLING?: BillingProvider;
+
+  /* custom domains (Cloudflare for SaaS) */
+  APP_HOST: string; // var, e.g. "rdyrct.com"; the app/API origin and CNAME target
+  // var, self-hosted copies only: what every tab of the copy is titled, e.g.
+  // "Acme links". Unset, the tab says the host the copy answers on.
+  SITE_NAME?: string;
+  // var, e.g. "rdyr.cc"; the shorter host new shared-domain links use. Requests
+  // on either host take the shared-domain path (index.ts); both read the same
+  // KV keys, since a shared-domain slug's key has no host in it. Unset means
+  // shared links use APP_HOST, as they did before the second host existed.
+  SHARED_LINK_HOST?: string;
+  CF_API_TOKEN?: string; // secret, Custom Hostnames edit
+  CF_ZONE_ID?: string; // var
+  // var, dev/test only: fakes the Custom Hostnames API. "simulated" walks a
+  // new domain through checking_dns and issuing_tls on a timer, so both states
+  // are visible in a browser; "instant" reports both ready at once, for e2e
+  // runs that assert on the end state and should not wait out a staged delay.
+  // Any other value (including unset) calls the real API, or fails closed.
+  CF_DEV_ENV?: string;
+
+  /* bot protection: Cloudflare Turnstile (#304). Secret unset disables the
+     check. */
+  TURNSTILE_SITE_KEY?: string; // secret, though public: /api/config serves it
+  TURNSTILE_SECRET_KEY?: string; // secret
+
+  /* destination check: Google Web Risk Lookup API (#341). Unset skips that
+     provider; the Cloudflare DNS check still runs. */
+  WEB_RISK_API_KEY?: string; // secret, a GCP API key restricted to the Web Risk API
+
+  /* click buffer: flush interval in ms, e2e only. Unset means 10 s. */
+  CLICK_FLUSH_MS?: string; // var
+
+  /* error tracking: unset disables capture (see sentry.ts, index.ts) */
+  SENTRY_DSN?: string; // var, from sentry.io project settings
+}
+
+export type DB = DrizzleD1Database<typeof schema>;
+
+export interface SessionUser {
+  id: string;
+  email: string;
+  name: string;
+  isAdmin: boolean;
+  emailVerified: boolean;
+  plan: OrgPlan;
+  polarSubscriptionCancelAtPeriodEnd: boolean;
+  polarSubscriptionCurrentPeriodEnd: number | null;
+  polarSubscriptionInterval: "month" | "year" | null;
+  /** Same-origin serving URL for the user's avatar, or null (blobatar). */
+  image: string | null;
+}
+
+export type Vars = {
+  db: DB;
+  user: SessionUser | null;
+  /** Request-scoped evlog wide-event logger, set by the evlog middleware. */
+  log: AuditableLogger;
+};
+
+export type AppEnv = { Bindings: Env; Variables: Vars };

@@ -1,0 +1,135 @@
+import { expect, test, type Page } from "@playwright/test";
+import { appUrl } from "./environment";
+import { queryRows } from "./db";
+import { signUpAndVerify, submitSignup } from "./resend";
+
+const password = "test-password-123";
+
+/** Creates a quick link and returns its slug and id. The slug comes from D1
+ * rather than from the dialog's text: shared-domain slugs are generated, so
+ * there is nothing to predict, and scraping the rendered URL out of
+ * surrounding copy is the brittle part of this test, not the part under
+ * test. The id is what lets the click assertion below find its own click
+ * rather than the globally-last one: the click buffer (#225) is one shared
+ * instance across every test the suite runs in parallel (playwright.config.ts
+ * runs 2 workers), so two tests' clicks can land in the very same flush. */
+async function createQuickLink(page: Page): Promise<{ slug: string; id: string }> {
+  const destination = page.getByPlaceholder("https://example.com/launch").first();
+  await expect(destination).toBeVisible();
+  await destination.fill("example.com/referrer-privacy");
+  await page.getByRole("button", { name: "Create link" }).click();
+  await expect(page.getByRole("dialog", { name: "Link created" })).toBeVisible();
+
+  const rows = await queryRows<{ slug: string; id: string }>(
+    page,
+    "SELECT slug, id FROM links WHERE destination LIKE '%referrer-privacy%' ORDER BY created_at DESC LIMIT 1",
+  );
+  expect(rows[0]?.slug).toBeTruthy();
+  return rows[0]!;
+}
+
+test("a click records the referring host, never the URL it came from (#20)", async ({ page }) => {
+  const email = `referrer-${Date.now()}@gmail.com`;
+  await signUpAndVerify(page, email, password);
+  const { slug, id: linkId } = await createQuickLink(page);
+
+  // A real referring URL: the path and query are the parts that carry other
+  // people's search terms and session tokens, and neither may be stored.
+  const referer = "https://forum.example.com/threads/42?q=private+search&token=secret";
+
+  // Polled every 0.5 s, not retried every 12 s: the buffer (#225) flushes
+  // 0.5 s out under CLICK_FLUSH_MS, and a slow sign-up used to leave a 12 s
+  // retry loop too little of the test's budget. Each attempt re-sends the
+  // redirect: the slug may not be live on KV yet (that publish rides the
+  // storage queue), and a click is best-effort (clickAnalyticsAllowed and
+  // the buffer both fail closed rather than block a redirect), so one hit can
+  // land nothing to poll for. Scoped to this test's own link: the buffer
+  // batches every concurrent test's clicks into the same flush.
+  await expect
+    .poll(
+      async () => {
+        const res = await page.request.get(`${appUrl}/${slug}`, {
+          headers: { referer },
+          maxRedirects: 0,
+        });
+        if (res.status() !== 302) return `redirect answered ${res.status()}`;
+        const rows = await queryRows<{ referrer: string }>(
+          page,
+          "SELECT referrer FROM clicks WHERE link_id = ? ORDER BY id DESC LIMIT 1",
+          [linkId],
+        );
+        return rows[0]?.referrer;
+      },
+      { message: "click never reached the clicks table", timeout: 25_000, intervals: [500] },
+    )
+    .toBe("forum.example.com");
+
+  const stored = await queryRows<{ referrer: string }>(page, "SELECT referrer FROM clicks");
+  expect(stored.length).toBeGreaterThan(0);
+  for (const row of stored) {
+    expect(row.referrer).not.toContain("secret");
+    expect(row.referrer).not.toContain("private");
+    expect(row.referrer).not.toContain("/");
+    expect(row.referrer).not.toContain("?");
+  }
+});
+
+test("one address cannot be mailed without limit by many callers (#50)", async ({ page }) => {
+  const victim = `victim-${Date.now()}@gmail.com`;
+
+  // Each attempt claims its own caller address, which the worker reads from
+  // cf-connecting-ip. That is what makes this a test of the recipient budget:
+  // no caller's own budget is spent twice, so the per-caller limit cannot be
+  // what refuses, and without a recipient-keyed limit every one of these
+  // would be accepted.
+  const statuses: number[] = [];
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const response = await page.request.post(
+      `${appUrl}/api/auth/email-otp/request-password-reset`,
+      {
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": `203.0.113.${10 + attempt}`,
+        },
+        data: { email: victim },
+        failOnStatusCode: false,
+      },
+    );
+    statuses.push(response.status());
+    if (response.status() === 429) break;
+  }
+
+  // Refused on the sixth, not merely somewhere: RL_EMAIL_RECIPIENT allows 5
+  // a minute in this environment, so the position of the 429 is what names
+  // which budget ran out. Anything later would mean the recipient limit let
+  // a sixth send through.
+  expect(statuses.indexOf(429)).toBe(5);
+});
+
+test("a throttled verification email still lands on the code screen (#50)", async ({ page }) => {
+  const email = `throttled-${Date.now()}@gmail.com`;
+
+  // The send refused, the account made anyway. That is what the email rate
+  // limit looks like from the browser, and the app used to answer it by
+  // leaving the person on the signup form: it reads as "signup failed", so
+  // they submit again, spend another send, and get the same nothing.
+  await page.route("**/api/auth/email-otp/send-verification-otp", (route) =>
+    route.fulfill({
+      status: 429,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "Too many requests. Try again shortly." }),
+    }),
+  );
+
+  await submitSignup(page, email, password);
+
+  // The toast shows for 3.25s, and a sign-up under a loaded suite can take
+  // longer than the default 5s to answer at all: this waits for the whole
+  // round trip, not just for the toast's own life.
+  await expect(page.getByText("Too many requests. Try again shortly.")).toBeVisible({
+    timeout: 20_000,
+  });
+  // The code screen, which is where the resend button is, not back at the form.
+  await expect(page.getByRole("heading", { name: "Enter your code" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Resend code" })).toBeVisible();
+});

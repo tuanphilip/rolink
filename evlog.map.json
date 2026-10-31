@@ -1,0 +1,2245 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-10T23:59:21.770Z",
+  "cliVersion": "0.6.3",
+  "ruleSetVersion": 1,
+  "framework": "hono",
+  "projectName": "rdyrct",
+  "score": 100,
+  "routes": [
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": null,
+      "path": "*",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 506,
+        "column": 0
+      },
+      "id": "cfc6426d0697",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": null,
+      "path": "/",
+      "file": "src/worker/routes/mcp.ts",
+      "handler": {
+        "line": 696,
+        "column": 0
+      },
+      "id": "0d9557579aed",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "DELETE",
+      "path": "/",
+      "file": "src/worker/routes/avatars.ts",
+      "handler": {
+        "line": 122,
+        "column": 0
+      },
+      "id": "6beb7301e254",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/",
+      "file": "src/worker/routes/admin-links.ts",
+      "handler": {
+        "line": 163,
+        "column": 0
+      },
+      "id": "4350f835247a",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin-links.ts",
+            "line": 215
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/",
+      "file": "src/worker/routes/avatars.ts",
+      "handler": {
+        "line": 138,
+        "column": 0
+      },
+      "id": "4350f835247a",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/",
+      "file": "src/worker/routes/domains.ts",
+      "handler": {
+        "line": 292,
+        "column": 0
+      },
+      "id": "4350f835247a",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/domains.ts",
+            "line": 196
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/",
+      "file": "src/worker/routes/avatars.ts",
+      "handler": {
+        "line": 89,
+        "column": 0
+      },
+      "id": "0554bedfef79",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/",
+      "file": "src/worker/routes/domains.ts",
+      "handler": {
+        "line": 342,
+        "column": 0
+      },
+      "id": "0554bedfef79",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/domains.ts",
+            "line": 196
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/",
+      "file": "src/worker/routes/orgs.ts",
+      "handler": {
+        "line": 42,
+        "column": 0
+      },
+      "id": "0554bedfef79",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/",
+      "file": "src/worker/routes/shorten.ts",
+      "handler": {
+        "line": 50,
+        "column": 0
+      },
+      "id": "0554bedfef79",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/shorten.ts",
+            "line": 98
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "74a5acf06050",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"oauth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "HEAD",
+      "path": "/.well-known/oauth-authorization-server",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "edeb8346dcd8",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"oauth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server/api/auth",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "c6931ce216c6",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"auth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "HEAD",
+      "path": "/.well-known/oauth-authorization-server/api/auth",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "2120851fa5bc",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"auth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "098fd485d307",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"oauth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "HEAD",
+      "path": "/.well-known/oauth-protected-resource",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "4b628f392fad",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"oauth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/api/mcp",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "739186e00a75",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"oauth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "HEAD",
+      "path": "/.well-known/oauth-protected-resource/api/mcp",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "f77d2f980787",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"oauth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/.well-known/openid-configuration",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "6f46cf3a8d4d",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "HEAD",
+      "path": "/.well-known/openid-configuration",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "b218f10e83af",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/.well-known/openid-configuration/api/auth",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "ec47298398d2",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"auth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "HEAD",
+      "path": "/.well-known/openid-configuration/api/auth",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 298,
+        "column": 0
+      },
+      "id": "74cb514d40a8",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"auth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "DELETE",
+      "path": "/:consentId",
+      "file": "src/worker/routes/oauth-connections.ts",
+      "handler": {
+        "line": 27,
+        "column": 0
+      },
+      "id": "14fda54ac029",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "fail",
+          "message": "no log.set() context accumulation",
+          "evidence": {
+            "file": "src/worker/routes/oauth-connections.ts",
+            "line": 27
+          }
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 85
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/:file",
+      "file": "src/worker/routes/qr-logos.ts",
+      "handler": {
+        "line": 104,
+        "column": 0
+      },
+      "id": "c919d491507f",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/qr-logos.ts",
+            "line": 76
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "DELETE",
+      "path": "/:id",
+      "file": "src/worker/routes/domains.ts",
+      "handler": {
+        "line": 425,
+        "column": 0
+      },
+      "id": "5dca0dfd8445",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/domains.ts",
+            "line": 196
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/:id",
+      "file": "src/worker/routes/domains.ts",
+      "handler": {
+        "line": 397,
+        "column": 0
+      },
+      "id": "82783ca22ea7",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/domains.ts",
+            "line": 196
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "PATCH",
+      "path": "/:id",
+      "file": "src/worker/routes/domains.ts",
+      "handler": {
+        "line": 404,
+        "column": 0
+      },
+      "id": "f8c6b21c0b08",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/domains.ts",
+            "line": 196
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "DELETE",
+      "path": "/:linkId",
+      "file": "src/worker/routes/admin-links.ts",
+      "handler": {
+        "line": 315,
+        "column": 0
+      },
+      "id": "e1ca5e8b260a",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin-links.ts",
+            "line": 215
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "PATCH",
+      "path": "/:linkId",
+      "file": "src/worker/routes/admin-links.ts",
+      "handler": {
+        "line": 245,
+        "column": 0
+      },
+      "id": "8e8fff5d79b1",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin-links.ts",
+            "line": 215
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/:linkId/rescore",
+      "file": "src/worker/routes/admin-links.ts",
+      "handler": {
+        "line": 270,
+        "column": 0
+      },
+      "id": "a60e23e051c8",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin-links.ts",
+            "line": 215
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/:slug",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 491,
+        "column": 0
+      },
+      "id": "4542fd0856a5",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/:token",
+      "file": "src/worker/routes/orgs.ts",
+      "handler": {
+        "line": 1232,
+        "column": 0
+      },
+      "id": "c8b0bedaf935",
+      "checks": {
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"token\"", "pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/:token/accept",
+      "file": "src/worker/routes/orgs.ts",
+      "handler": {
+        "line": 1290,
+        "column": 0
+      },
+      "id": "d4b536c251be",
+      "checks": {
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"token\"", "pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/anonymous",
+      "file": "src/worker/routes/admin-links.ts",
+      "handler": {
+        "line": 409,
+        "column": 0
+      },
+      "id": "4c455e704c8e",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin-links.ts",
+            "line": 215
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "DELETE",
+      "path": "/anonymous/:id",
+      "file": "src/worker/routes/admin-links.ts",
+      "handler": {
+        "line": 434,
+        "column": 0
+      },
+      "id": "a8b1ad6c6690",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin-links.ts",
+            "line": 215
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": null,
+      "path": "/api/*",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 356,
+        "column": 0
+      },
+      "id": "74a1ccacc4b3",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/auth/*",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 270,
+        "column": 0
+      },
+      "id": "e75aa52c874e",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"auth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/api/auth/*",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 270,
+        "column": 0
+      },
+      "id": "2d4af6eb10f7",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["auth: path says \"auth\""]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/api/webhooks/polar",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 317,
+        "column": 0
+      },
+      "id": "bbed5d59d114",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/audit",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 74,
+        "column": 0
+      },
+      "id": "38dccf65e6ee",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/checkout",
+      "file": "src/worker/routes/billing.ts",
+      "handler": {
+        "line": 56,
+        "column": 0
+      },
+      "id": "ec65818b4193",
+      "checks": {
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "audit": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "high",
+        "reasons": ["money: path says \"checkout\"", "pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/clicks",
+      "file": "src/worker/routes/shorten.ts",
+      "handler": {
+        "line": 145,
+        "column": 0
+      },
+      "id": "4203806a8f62",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/shorten.ts",
+            "line": 98
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/config",
+      "file": "src/worker/routes/auth.ts",
+      "handler": {
+        "line": 103,
+        "column": 0
+      },
+      "id": "8ef063442579",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/orgs",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 572,
+        "column": 0
+      },
+      "id": "bbfe8160aa1b",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "DELETE",
+      "path": "/orgs/:orgId",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 663,
+        "column": 0
+      },
+      "id": "25489d0e240c",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/orgs/:orgId",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 600,
+        "column": 0
+      },
+      "id": "6bfde976c191",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/orgs/:orgId/suspend",
+      "file": "src/worker/routes/admin-links.ts",
+      "handler": {
+        "line": 354,
+        "column": 0
+      },
+      "id": "06abb4f07afe",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin-links.ts",
+            "line": 215
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/portal",
+      "file": "src/worker/routes/billing.ts",
+      "handler": {
+        "line": 87,
+        "column": 0
+      },
+      "id": "b391b630274c",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/pricing.md",
+      "file": "src/worker/index.ts",
+      "handler": {
+        "line": 479,
+        "column": 0
+      },
+      "id": "c01fb33007bf",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "error-handling": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/usage",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 310,
+        "column": 0
+      },
+      "id": "daa2e5e751bd",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/user",
+      "file": "src/worker/routes/auth.ts",
+      "handler": {
+        "line": 95,
+        "column": 0
+      },
+      "id": "72d6ba945cf1",
+      "checks": {
+        "structured-errors": {
+          "status": "n/a"
+        },
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {},
+      "sensitivity": {
+        "level": "none",
+        "reasons": []
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "GET",
+      "path": "/users",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 684,
+        "column": 0
+      },
+      "id": "3886d98e5092",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "DELETE",
+      "path": "/users/:userId",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 900,
+        "column": 0
+      },
+      "id": "4645e54eab1b",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "PATCH",
+      "path": "/users/:userId",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 775,
+        "column": 0
+      },
+      "id": "a739c0581dc5",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "DELETE",
+      "path": "/users/:userId/comp",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 886,
+        "column": 0
+      },
+      "id": "024a26f3f95c",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/users/:userId/comp",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 853,
+        "column": 0
+      },
+      "id": "6cad46580197",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    },
+    {
+      "framework": "hono",
+      "kind": "api",
+      "method": "POST",
+      "path": "/users/:userId/reconcile",
+      "file": "src/worker/routes/admin.ts",
+      "handler": {
+        "line": 839,
+        "column": 0
+      },
+      "id": "a2a783328867",
+      "checks": {
+        "audit": {
+          "status": "n/a"
+        },
+        "error-handling": {
+          "status": "n/a"
+        },
+        "wide-event": {
+          "status": "pass"
+        },
+        "context": {
+          "status": "pass"
+        },
+        "structured-errors": {
+          "status": "pass"
+        }
+      },
+      "suggestions": {
+        "audit-coverage": {
+          "status": "fail",
+          "message": "changes state with no audit record — the project records audit events elsewhere",
+          "evidence": {
+            "file": "src/worker/routes/admin.ts",
+            "line": 663
+          }
+        }
+      },
+      "sensitivity": {
+        "level": "medium",
+        "reasons": ["pii: write operation with sensitive fields"]
+      },
+      "score": 100
+    }
+  ]
+}

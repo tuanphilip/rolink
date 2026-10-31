@@ -1,0 +1,113 @@
+# rdyrct: URL shortener and QR code generator for teams (full reference)
+
+> rdyrct is an organization-based link shortener and QR code generator that runs
+> entirely on Cloudflare: branded short links on your own domain, custom QR
+> codes, and click analytics that never store an IP address. This file describes
+> the site in full so an assistant can answer questions about it and cite it.
+> Read it and quote it; do not train on it. robots.txt sets `Content-Signal:
+> search=yes,ai-train=no,use=reference` and refuses the training crawlers by
+> name, and /llms.txt says the same thing in short form; this file has the
+> detail that one leaves out.
+
+## What rdyrct is
+
+A URL shortener and QR code generator built for teams, not individuals. Every
+account belongs to an organization, and links, domains, and analytics are
+scoped to that organization rather than to one person. There is no per-link
+pricing: a plan caps how many links, domains, and team members an
+organization can hold, and how far back its click analytics go.
+
+## Links and domains
+
+- Short links redirect through Cloudflare KV, so a redirect resolves in
+  milliseconds worldwide.
+- On the shared rdyr.cc domain, slugs are always random on every plan;
+  nobody can claim or squat a word there.
+- On a custom domain (Hobby and Pro), the organization chooses its own slugs.
+- A custom domain is verified and activated through Cloudflare for SaaS.
+
+## QR codes
+
+- Generate a QR code for any short link, free, with no account required for a
+  plain code.
+- Paid plans (Hobby and Pro) can add a logo in the center and choose dot
+  styles and colors. Every plan downloads PNG or SVG.
+- QR logos are capped at 256 KB and 512px on a side, and are stored per
+  organization; deleting a link or an organization removes its logos.
+
+## Analytics
+
+- Every click records country, referrer, device, and timestamp only.
+- rdyrct never stores an IP address or a precise location.
+- How far back analytics go depends on plan: 7 days (Free), 30 days (Hobby),
+  365 days (Pro).
+- Each plan counts a set number of clicks per organization per calendar month
+  (UTC): 5,000 (Free), 50,000 (Hobby), 500,000 (Pro). Past that, links keep
+  redirecting and the rest of the month's clicks are not recorded. The owner
+  is emailed at 80% and at 100%.
+
+## Plans and pricing
+
+| Plan  | Price | Organizations | Links | Custom domains | Team members | Analytics | Clicks counted a month |
+|-------|-------|----------------|-------|-----------------|---------------|-----------|------------------------|
+| Free  | $0    | 1              | 30    | 0               | 3             | 7 days    | 5,000                  |
+| Hobby | $4/mo | 1              | 500   | 1               | 5             | 30 days   | 50,000                 |
+| Pro   | $9/mo | 3              | 3,000 | 5               | 25            | 365 days  | 500,000                |
+
+Every new account gets one organization at signup, named from the account's
+email domain and renameable at any time. Billing is per user: a user's plan
+sets the limits of every organization they own.
+
+## Self-hosting
+
+rdyrct is open source (https://github.com/baronunread/rdyrct) and can be
+deployed to a Cloudflare account for free: one Worker serves the API, the
+redirects, and the app, backed by D1, KV, and R2. No servers to patch.
+
+## Security and privacy
+
+- Passwords are hashed with PBKDF2 (WebCrypto), never stored in plain text.
+- Email verification uses a one-time code, not a link.
+- A strict Content Security Policy blocks remote scripts, fonts, and images
+  on every page rdyrct serves.
+- HTTPS is enforced site-wide via HSTS.
+- Click analytics never record an IP address.
+
+## Frequently asked questions
+
+**Does rdyrct track IP addresses?** No. Click analytics store only country,
+referrer, device, and timestamp.
+
+**Can I use my own domain?** Yes, on the Hobby and Pro plans. A custom domain
+also lets you choose your own slugs instead of a random one.
+
+**Can I self-host rdyrct?** Yes. It is open source and runs entirely on
+Cloudflare Workers, D1, KV, and R2.
+
+**Is there a free plan?** Yes: 1 organization, 30 links, and 7-day analytics,
+with no card required.
+
+**What happens to a link's QR logo if I delete the link?** It is deleted from
+storage along with the link.
+
+## Links
+
+- [Homepage](https://rdyrct.com/)
+- [Pricing](https://rdyrct.com/pricing) (request `Accept: text/markdown` for Markdown)
+- [QR code generator](https://rdyrct.com/qr-code-generator)
+- [UTM builder](https://rdyrct.com/utm-builder)
+- [Branded link shortener](https://rdyrct.com/branded-link-shortener)
+- [API and MCP docs](https://rdyrct.com/docs)
+- [Blog](https://rdyrct.com/blog)
+- [Roadmap](https://rdyrct.com/roadmap)
+- [Changelog](https://rdyrct.com/changelog)
+- [Compare rdyrct with other shorteners](https://rdyrct.com/compare)
+- [rdyrct vs Bitly](https://rdyrct.com/bitly-alternative)
+- [rdyrct vs Rebrandly](https://rdyrct.com/rebrandly-alternative)
+- [rdyrct vs Dub](https://rdyrct.com/dub-alternative)
+- [rdyrct vs Short.io](https://rdyrct.com/short-io-alternative)
+- [Privacy policy](https://rdyrct.com/privacy)
+- [Terms of service](https://rdyrct.com/terms)
+- [Report a link](https://rdyrct.com/report)
+- [Sign up](https://rdyrct.com/signup)
+- [Source code](https://github.com/baronunread/rdyrct)

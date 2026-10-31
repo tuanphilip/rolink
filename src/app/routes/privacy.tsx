@@ -1,0 +1,138 @@
+// fallow-ignore-file code-duplication -- legal sections share structural patterns
+import { SUPPORT_EMAIL } from "../ui/footer";
+import { CookieSettingsButton } from "../ui/consent-banner";
+import { LegalPageLayout } from "../components/legal-page-layout";
+import { WebMcpMarketingTools } from "../components/webmcp-marketing-tools";
+import { useSeo } from "../lib/seo";
+import { useMarketingScroll } from "../lib/marketing-scroll";
+import { useAudience } from "../lib/audience";
+
+// main.tsx names this export as a string, for lazyRouteComponent, which
+// static analysis can't follow.
+// fallow-ignore-next-line unused-export
+export function PrivacyPage() {
+  const { authed } = useAudience();
+  useSeo("/privacy");
+  useMarketingScroll();
+  return (
+    <LegalPageLayout
+      authed={authed}
+      title="Privacy policy"
+      intro="This policy explains what data rdyrct collects, why, the legal basis for it, and how you can exercise your rights. Last updated 26 October 2026."
+    >
+      <WebMcpMarketingTools />
+
+      <section>
+        <h2 className="mb-2 font-bold">Data controller</h2>
+        <p className="text-muted">
+          The data controller for rdyrct is <span className="text-text">Andrea Bruno</span>. For any
+          privacy request or question, contact{" "}
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-accent hover:underline">
+            {SUPPORT_EMAIL}
+          </a>
+          .
+        </p>
+      </section>
+
+      <section>
+        <h2 className="mb-2 font-bold">Data we collect</h2>
+        <p className="text-muted">
+          We collect your account email address and name, and the organizations, links, domains, and
+          settings you create. For click analytics on your links we store only an approximate
+          country, the referrer host, device type, and a timestamp for each click: we explicitly do{" "}
+          <span className="text-text">not</span> store the IP address of the people who click your
+          links, their precise location, or any data that would allow cross-site tracking. If you
+          report a link, we store the address you report, your reason and note, and the email you
+          choose to give. We do not store your IP address. Separately, if you accept analytics in
+          the cookie banner, we use PostHog to understand how the product itself is used: which
+          features you use and app events such as signing in or creating a link, tied to your
+          account email and name. We turn off autocapture and session recording, so PostHog never
+          records what you type or a replay of your screen. Nothing is sent to PostHog, and no
+          PostHog cookie is set, unless you accept. Until you answer the banner, a few steps you
+          take on the current page (such as viewing it or clicking a button) are held in your
+          browser&apos;s memory: accepting sends them, with the time they happened; rejecting or
+          leaving the page discards them. We also use Sentry to receive technical error reports from
+          the app. These reports include technical diagnostic data such as the error, browser, and
+          page path. We remove page query strings before sending them.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="mb-2 font-bold">Why we process it (legal basis)</h2>
+        <p className="text-muted">
+          Under the GDPR, we process account and organization data to provide the service you sign
+          up for (performance of a contract), send transactional email such as verification codes
+          and team invites (contract), and produce click analytics for your own links (our
+          legitimate interest in offering a useful product). The session cookie is strictly
+          necessary and requires no consent. Product usage analytics through PostHog runs only on
+          your consent, given or withdrawn at any time through the cookie banner. Reopen it with{" "}
+          <CookieSettingsButton className="text-accent hover:underline" />, here or at the foot of
+          any public page. We ask again after six months. We process technical error reports through
+          Sentry for our legitimate interest in keeping the service secure and reliable. Sentry does
+          not set a cookie in rdyrct. We check where links point against Google&apos;s list of
+          unsafe sites for our legitimate interest in keeping phishing and malware off the service.
+          When you sign up, reset a password, shorten a link from the home page, build a UTM link,
+          or report a link, Cloudflare Turnstile reads signals from your browser and connection to
+          check that a person, not a script, sent the form. We use it for our legitimate interest in
+          keeping automated sign-ups and abuse off the service.
+        </p>
+      </section>
+
+      {/* Addressable on its own. People (and the scanners that check for a
+          site's cookie policy) look for a page about cookies, not a heading
+          two thirds of the way down a privacy policy. This is that page's
+          address; splitting it into a real second page would mean two
+          documents saying the same thing and drifting apart. */}
+      <section id="cookies">
+        <h2 className="mb-2 font-bold">Cookies</h2>
+        <p className="text-muted">
+          rdyrct sets a strictly-necessary session cookie to keep you signed in. If you accept
+          analytics in the cookie banner, PostHog also sets a cookie to recognize you across visits;
+          if you reject or ignore the banner, that cookie is never set. Your answer to the banner is
+          kept in your browser&apos;s local storage for six months. We do not use advertising
+          cookies of any kind.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="mb-2 font-bold">Sub-processors</h2>
+        <p className="text-muted">
+          We rely on a small number of sub-processors to run the service: Cloudflare (hosting, the
+          D1 database, KV storage, and the Turnstile check on forms), Resend (transactional email),
+          Polar (billing, acting as merchant of record), PostHog, EU region (product usage
+          analytics), Sentry (technical error monitoring), and Google (Web Risk). Google receives
+          the destination address of a link when the link is created or edited, when we check it
+          again each week, and when its traffic jumps, and checks it against Google&apos;s list of
+          unsafe sites. It receives nothing about you or the people who click the link. Some may
+          process data outside the EU/EEA; where they do, transfers are covered by the appropriate
+          safeguards, such as the EU Standard Contractual Clauses.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="mb-2 font-bold">Data retention</h2>
+        <p className="text-muted">
+          We retain account and organization data for as long as your account is active. Click
+          analytics are kept only as long as needed to provide reporting, after which they are
+          deleted or aggregated. Deleting your account (Settings → Delete account) removes your
+          personal data within a reasonable period; billing records may be retained where required
+          by law.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="mb-2 font-bold">Your rights</h2>
+        <p className="text-muted">
+          You have the right to access, correct, export, or erase your data, to object to or
+          restrict processing, and to withdraw consent where it applies. You can delete your account
+          and its data yourself at any time from Settings, or contact us at{" "}
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-accent hover:underline">
+            {SUPPORT_EMAIL}
+          </a>
+          . If you are in the EU you also have the right to lodge a complaint with a supervisory
+          authority, in Italy, the Garante per la protezione dei dati personali.
+        </p>
+      </section>
+    </LegalPageLayout>
+  );
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  // .oxlint/anti-slop is a vendored copy of the lint plugin, not code
+  // this repo maintains. oxlint and bun fmt skip it for the same reason.
+  "ignorePatterns": ["scripts/seed-local.ts", ".oxlint/anti-slop/**"],
+  // @oxlint/plugins is imported by the vendored anti-slop plugin, which the
+  // ignorePatterns above keep out of the analysis.
+  // preloadFonts in vite.config.ts resolves these package names dynamically;
+  // the stylesheet also imports them through /node_modules URLs.
+  // portless is run as a command (scripts/dev.ts), never imported.
+  "ignoreDependencies": [
+    "portless",
+    "tailwindcss",
+    "@oxlint/plugins",
+    "@fontsource-variable/figtree",
+    "@fontsource/jetbrains-mono",
+  ],
+  // scripts/og-image.html is the source for public/og.png. It is only ever
+  // opened through the dev server, which is what resolves these hrefs; there
+  // is no bundler step to point at the real files.
+  "ignoreUnresolvedImports": [
+    "/node_modules/@fontsource-variable/figtree/wght.css",
+    "/node_modules/@fontsource/jetbrains-mono/latin-400.css",
+    "/node_modules/@fontsource/jetbrains-mono/latin-700.css",
+  ],
+  // "run" is called by the Cloudflare Workflows runtime, not application code.
+  "usedClassMembers": [{ "extends": "WorkflowEntrypoint", "members": ["run"] }],
+  "audit": {
+    "gate": "new-only",
+    "healthBaseline": "fallow-baselines/health.json",
+  },
+}

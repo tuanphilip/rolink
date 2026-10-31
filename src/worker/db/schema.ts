@@ -1,0 +1,944 @@
+// fallow-ignore-file code-duplication -- BetterAuth's OAuth token tables share columns by design
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  primaryKey,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
+import { relations } from "drizzle-orm";
+import { REPORT_REASONS } from "../../shared/types";
+
+/* ---------------- BetterAuth-managed tables ---------------- */
+// Shapes follow the BetterAuth core schema (bunx @better-auth/cli generate),
+// plus our additional `isAdmin` field on user.
+
+export const user = sqliteTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: integer("email_verified", { mode: "boolean" }).notNull().default(false),
+  image: text("image"),
+  isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+  // Suspended by a platform admin: sessions are wiped and sign-in is refused.
+  banned: integer("banned", { mode: "boolean" }).notNull().default(false),
+  // Billing lives on the user, not the org: one Free/Hobby/Pro subscription
+  // per person. An org's effective limits are its owner's plan (see plan.ts).
+  //
+  // DERIVED. `plan` is what the user may do, and it is coalesce(comp_plan,
+  // entitling subscription_plan, 'free'). Only entitlement.ts writes it, and
+  // it always writes it from the two columns below in the same statement.
+  // Anything that sets it by hand puts entitlement out of step with billing,
+  // which is the bug #81 fixed.
+  plan: text("plan", { enum: ["free", "hobby", "pro"] })
+    .notNull()
+    .default("free"),
+  // What Polar says: written by the webhook, never by an admin. Null means no
+  // subscription. `subscriptionStatus` is Polar's own status string, kept raw
+  // so a status we have no rule for is still visible (see entitlement.ts).
+  subscriptionPlan: text("subscription_plan", { enum: ["hobby", "pro"] }),
+  subscriptionStatus: text("subscription_status"),
+  // No price here on purpose (#82). Polar knows what it charged, net of
+  // discounts, tax and refunds, so revenue is read in its dashboard. A copy
+  // kept here would be a second figure to keep true, and the wrong one to
+  // trust when the two disagree.
+  //
+  // What an admin granted by hand: written by the comp routes, never by a
+  // webhook. A comp outranks the subscription, so revoking a subscription
+  // cannot take away access an admin gave.
+  compPlan: text("comp_plan", { enum: ["hobby", "pro"] }),
+  compGrantedBy: text("comp_granted_by"),
+  compGrantedAt: integer("comp_granted_at", { mode: "timestamp_ms" }),
+  compReason: text("comp_reason"),
+  polarCustomerId: text("polar_customer_id"),
+  polarSubscriptionId: text("polar_subscription_id"),
+  polarSubscriptionCancelAtPeriodEnd: integer("polar_subscription_cancel_at_period_end", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  polarSubscriptionInterval: text("polar_subscription_interval", { enum: ["month", "year"] }),
+  polarSubscriptionCurrentPeriodEnd: integer("polar_subscription_current_period_end", {
+    mode: "timestamp_ms",
+  }),
+  // When the subscription state these columns reflect was last changed at
+  // Polar (its `modified_at`, or `created_at` before a first change). Every
+  // webhook mutation refuses to write over a newer value, which is what
+  // makes a late or replayed delivery harmless. See routes/billing.ts.
+  polarEventAt: integer("polar_event_at", { mode: "timestamp_ms" }),
+  // When the welcome email was claimed for sending. Null means not yet.
+  welcomeSentAt: integer("welcome_sent_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const session = sqliteTable(
+  "session",
+  {
+    id: text("id").primaryKey(),
+    token: text("token").notNull().unique(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("idx_session_user").on(t.userId)],
+);
+
+export const account = sqliteTable(
+  "account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: integer("access_token_expires_at", {
+      mode: "timestamp_ms",
+    }),
+    refreshTokenExpiresAt: integer("refresh_token_expires_at", {
+      mode: "timestamp_ms",
+    }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    index("idx_account_user").on(t.userId),
+    uniqueIndex("idx_account_provider_account_id").on(t.providerId, t.accountId),
+  ],
+);
+
+// What lets BetterAuth read a session and its user in one query
+// (advanced.database.joins in better-auth.ts) instead of two round trips on
+// every signed-in request. It joins session and account to user, nothing else.
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account),
+}));
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, { fields: [session.userId], references: [user.id] }),
+}));
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, { fields: [account.userId], references: [user.id] }),
+}));
+
+export const verification = sqliteTable(
+  "verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("idx_verification_identifier").on(t.identifier)],
+);
+
+/* ---------------- app tables ---------------- */
+
+function qrColumns() {
+  return {
+    qrLogo: text("qr_logo").notNull().default(""),
+    qrStyle: text("qr_style").notNull().default(""),
+    qrColor: text("qr_color").notNull().default(""),
+    qrCorner: text("qr_corner").notNull().default(""),
+    qrBg: text("qr_bg").notNull().default(""),
+    qrEyeColor: text("qr_eye_color").notNull().default(""),
+    qrLogoSize: real("qr_logo_size"),
+  } as const;
+}
+
+export const orgs = sqliteTable("orgs", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  // No plan/billing columns: an org's plan is its owner's plan (plan.ts).
+  ...qrColumns(),
+  // Which domain new links start on (#69). The foreign key and its ON DELETE
+  // SET NULL live in migration 0018; declaring the reference here too would
+  // need a lazy callback, because `domains` is defined below and already
+  // references this table.
+  defaultDomainId: text("default_domain_id"),
+  createdAt: integer("created_at").notNull(),
+  // Set right before the teardown workflow starts, so requireOrgRole can
+  // reject writes before the workflow's gather step ever runs. Null means
+  // not deleting.
+  deletingAt: integer("deleting_at"),
+  // This org is beyond its owner's `orgs` cap, so it is read-only until they
+  // upgrade or pick it as the one to keep (#160). Null means active. Its
+  // links keep redirecting: the lock is between us and the account holder.
+  lockedAt: integer("locked_at"),
+  // Set alongside a whole-org link suspension (abuse.ts's suspendOrgLinks, or
+  // the admin route), so the org cannot mint a replacement the moment its
+  // existing links stop redirecting. Null means not suspended. Unlike
+  // `lockedAt`, its links do NOT keep redirecting -- suspension means the
+  // content itself is the problem, not the plan.
+  linksSuspendedAt: integer("links_suspended_at"),
+  // Set by the abuse sweep (traffic that looks wrong) or by enough public
+  // reports. It changes nothing for the owner: the links keep redirecting
+  // until an admin looks. Null means nothing is waiting for review.
+  reviewFlaggedAt: integer("review_flagged_at"),
+  // Set when an admin restores the org's links or marks it reviewed: a human
+  // looked, so the automatic suspend and flag stand down for a while (see
+  // abuse.ts's orgState). Without it the next sweep undoes the decision.
+  clearedAt: integer("cleared_at"),
+  // Set when the abuse sweep warns the org's links (link-warning.ts's
+  // warnOrgLinks), with the reason. A link made while it is set is born
+  // warned, so fresh links are no way round it. "Mark reviewed" clears it.
+  linksWarnedAt: integer("links_warned_at"),
+  linksWarnReason: text("links_warn_reason"),
+  // The Web Risk lookups link creates and edits spent today: `webRiskDay` is
+  // the UTC day number they count for (destination-check.ts's budget).
+  webRiskDay: integer("web_risk_day"),
+  webRiskLookups: integer("web_risk_lookups"),
+  // Set when the owner is banned (abuse-hold.ts's banUser). Every link and
+  // custom domain of the org answers "disabled", nobody can change it, and
+  // the daily cron deletes the org BAN_PURGE_AFTER_DAYS later. An unban
+  // before then clears it. Null means not disabled.
+  disabledAt: integer("disabled_at"),
+});
+
+/**
+ * What the last reconciliation pass found for one org (#158).
+ *
+ * Written only by reconcile.ts, on every billing event that changes a plan
+ * and by the admin's manual run. Read by the app to explain the state and by
+ * the daily cron to send the day-23 warning. Nothing here decides access on
+ * its own: the marker columns (`orgs.lockedAt`, `domains.lockedAt`,
+ * `orgMembers.previousRole`) are what routes and the redirect path read.
+ */
+export const orgEntitlements = sqliteTable(
+  "org_entitlements",
+  {
+    orgId: text("org_id")
+      .primaryKey()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    plan: text("plan", { enum: ["free", "hobby", "pro"] }).notNull(),
+    /** JSON `{ links?: n, members?: n, domains?: n }`: the live count of each
+     * resource that is over its cap. `{}` means the org is inside its plan. */
+    overJson: text("over_json").notNull().default("{}"),
+    /** Epoch ms the 30 days run out; null while nothing is over. */
+    graceEndsAt: integer("grace_ends_at"),
+    reconciledAt: integer("reconciled_at").notNull(),
+    notifiedAt: integer("notified_at"),
+    warnedAt: integer("warned_at"),
+  },
+  (t) => [index("idx_org_entitlements_grace").on(t.graceEndsAt)],
+);
+
+export const orgMembers = sqliteTable(
+  "org_members",
+  {
+    orgId: text("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["owner", "admin", "member", "viewer"] }).notNull(),
+    // What this member was before a downgrade demoted them to viewer (#161).
+    // Null means they hold the role they were given. Re-upgrading restores it.
+    previousRole: text("previous_role", { enum: ["owner", "admin", "member", "viewer"] }),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.userId] }), index("idx_org_members_user").on(t.userId)],
+);
+
+export const invites = sqliteTable(
+  "invites",
+  {
+    token: text("token").primaryKey(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["admin", "member", "viewer"] }).notNull(),
+    // Set when the invite was emailed to a specific address: only that
+    // account may accept. Null for copy-only link invites (bearer links).
+    email: text("email"),
+    // nullable: keep invites/links around if their author is deleted
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (t) => [index("idx_invites_org").on(t.orgId)],
+);
+
+export const domains = sqliteTable(
+  "domains",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    hostname: text("hostname").notNull().unique(),
+    status: text("status", { enum: ["checking_dns", "issuing_tls", "active", "error"] })
+      .notNull()
+      .default("checking_dns"),
+    // Human-readable reason a domain sits in `error` (DNS never resolved, cert
+    // never issued). Empty for every other status. Surfaced to users and admins.
+    statusReason: text("status_reason").notNull().default(""),
+    rootRedirect: text("root_redirect").notNull().default(""),
+    cfHostnameId: text("cf_hostname_id"),
+    // How Cloudflare checks the domain (#383): "http" waits for the CNAME,
+    // "txt" checks TXT records so a domain still pointed at another service
+    // is ready before its CNAME switches.
+    validation: text("validation", { enum: ["http", "txt"] })
+      .notNull()
+      .default("http"),
+    // Beyond the org's `domains` cap after a downgrade (#159). It keeps
+    // serving until the org's grace period ends, then stops; the row, the KV
+    // entry and the Cloudflare hostname all stay, so an upgrade restores it
+    // with no re-verification. Null means fine.
+    lockedAt: integer("locked_at"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [index("idx_domains_org").on(t.orgId)],
+);
+
+export const links = sqliteTable(
+  "links",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    // null = the shared default domain. Slug uniqueness is per-domain via the
+    // raw unique index idx_links_domain_slug on (ifnull(domain_id,''), slug)
+    // (created in migrations; drizzle cannot express ifnull indexes).
+    domainId: text("domain_id").references(() => domains.id),
+    slug: text("slug").notNull(),
+    destination: text("destination").notNull(),
+    title: text("title").notNull().default(""),
+    utmSource: text("utm_source").notNull().default(""),
+    utmMedium: text("utm_medium").notNull().default(""),
+    utmCampaign: text("utm_campaign").notNull().default(""),
+    utmTerm: text("utm_term").notNull().default(""),
+    utmContent: text("utm_content").notNull().default(""),
+    ...qrColumns(),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at").notNull(),
+    // Destination risk (#68). Null means unscored, never clean: a provider
+    // outage and a clean answer must not look the same. Admin-only (#67),
+    // never in an org-scoped response.
+    riskScore: integer("risk_score"),
+    riskReasons: text("risk_reasons"),
+    riskCheckedAt: integer("risk_checked_at"),
+    riskProvider: text("risk_provider"),
+    // Admin moderation (#67). Null means active. One flag covers every
+    // address the link answers to, and the redirect stops because
+    // desiredKvValue publishes a suspended link's key as held (#344): put
+    // the check anywhere else and the next edit un-suspends it in silence.
+    suspendedAt: integer("suspended_at"),
+    suspendedBy: text("suspended_by").references(() => user.id, { onDelete: "set null" }),
+    suspendReason: text("suspend_reason"),
+    // A warning in front of the redirect (#344): the link works, after an
+    // interstitial naming the destination host. Null means none. Rides in the
+    // KV value through desiredKvValue, like suspension. The reason is the
+    // admin's; no visitor sees it.
+    warnedAt: integer("warned_at"),
+    warnReason: text("warn_reason"),
+    // When Google Web Risk last answered for this destination (#341), so the
+    // weekly rescan can find the links it has not seen lately.
+    webRiskCheckedAt: integer("web_risk_checked_at"),
+  },
+  (t) => [index("idx_links_org").on(t.orgId)],
+);
+
+/**
+ * Every privileged mutation an admin makes, appended and never updated (#67).
+ *
+ * No foreign keys: an admin account can be deleted, and the record of what
+ * they did has to outlive them. The same goes for target_id, which often
+ * points at exactly the row this entry exists to remember the deletion of.
+ */
+export const adminActions = sqliteTable(
+  "admin_actions",
+  {
+    id: text("id").primaryKey(),
+    actorUserId: text("actor_user_id").notNull(),
+    /** e.g. "link.suspend", "org.suspend_links", "user.ban". */
+    action: text("action").notNull(),
+    targetType: text("target_type").notNull(),
+    targetId: text("target_id").notNull(),
+    /** Free-form JSON, so an entry still reads once its target is gone. */
+    detail: text("detail"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    index("idx_admin_actions_created").on(t.createdAt),
+    index("idx_admin_actions_target").on(t.targetType, t.targetId),
+  ],
+);
+
+// Every address a link answers to, including its own primary as a row kept
+// in sync with links.domainId/slug (see routes/links.ts). Slug uniqueness
+// lives on the active subset of this table (idx_link_addresses_domain_slug_active,
+// a partial index migrations must create; drizzle cannot express partial
+// indexes), not on `links` itself, so a renamed-away slug can keep working as
+// a retired-later temp_alias without colliding with the link's new primary.
+export const linkAddresses = sqliteTable(
+  "link_addresses",
+  {
+    id: text("id").primaryKey(),
+    linkId: text("link_id")
+      .notNull()
+      .references(() => links.id, { onDelete: "cascade" }),
+    orgId: text("org_id").notNull(),
+    domainId: text("domain_id").references(() => domains.id),
+    slug: text("slug").notNull(),
+    kind: text("kind", { enum: ["primary", "temp_alias", "permanent_alias"] }).notNull(),
+    creationReason: text("creation_reason", {
+      enum: ["created", "renamed", "promoted", "same_destination_merge", ""],
+    })
+      .notNull()
+      .default(""),
+    // Null = never expires (primary, permanent_alias). Set only on temp_alias.
+    expiresAt: integer("expires_at"),
+    // Null = active. Set once, by "Remove now" or the expiry sweep, and never
+    // cleared: the row stays for its historical clicks.
+    retiredAt: integer("retired_at"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    index("idx_link_addresses_link").on(t.linkId),
+    index("idx_link_addresses_org").on(t.orgId),
+  ],
+);
+
+/**
+ * Public abuse reports (migration 0038). Link and org are null when the
+ * reported address matched nothing: stored anyway so the form answers the
+ * same for every slug.
+ */
+export const linkReports = sqliteTable("link_reports", {
+  id: text("id").primaryKey(),
+  slug: text("slug").notNull(),
+  linkId: text("link_id").references(() => links.id, { onDelete: "set null" }),
+  orgId: text("org_id").references(() => orgs.id, { onDelete: "set null" }),
+  reason: text("reason", { enum: REPORT_REASONS }).notNull(),
+  note: text("note").notNull().default(""),
+  contact: text("contact").notNull().default(""),
+  status: text("status").notNull().default("open"),
+  createdAt: integer("created_at").notNull(),
+});
+
+/** Hosts a link may not point at (migration 0039). */
+export const blockedHosts = sqliteTable("blocked_hosts", {
+  host: text("host").primaryKey(),
+  reason: text("reason").notNull().default(""),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: integer("created_at").notNull(),
+});
+
+/** An import from another service (#383, migration 0041). */
+export const linkImports = sqliteTable(
+  "link_imports",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    service: text("service").notNull(),
+    status: text("status", { enum: ["uploading", "running", "done", "dismissed"] })
+      .notNull()
+      .default("uploading"),
+    total: integer("total").notNull(),
+    createdAt: integer("created_at").notNull(),
+    finishedAt: integer("finished_at"),
+  },
+  (t) => [index("idx_link_imports_org").on(t.orgId, t.createdAt)],
+);
+
+/** One row of an import's file, and what became of it. */
+export const linkImportRows = sqliteTable(
+  "link_import_rows",
+  {
+    importId: text("import_id")
+      .notNull()
+      .references(() => linkImports.id, { onDelete: "cascade" }),
+    line: integer("line").notNull(),
+    host: text("host").notNull(),
+    slug: text("slug").notNull(),
+    destination: text("destination").notNull(),
+    title: text("title").notNull().default(""),
+    status: text("status", { enum: ["pending", "imported", "exists", "failed"] })
+      .notNull()
+      .default("pending"),
+    reason: text("reason").notNull().default(""),
+  },
+  (t) => [
+    primaryKey({ columns: [t.importId, t.line] }),
+    index("idx_link_import_rows_status").on(t.importId, t.status),
+  ],
+);
+
+export const clicks = sqliteTable(
+  "clicks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    linkId: text("link_id")
+      .notNull()
+      .references(() => links.id, { onDelete: "cascade" }),
+    orgId: text("org_id").notNull(),
+    ts: integer("ts").notNull(),
+    country: text("country").notNull().default(""),
+    referrer: text("referrer").notNull().default(""),
+    device: text("device").notNull().default(""),
+    // Set by the click queue producer (crypto.randomUUID()); lets the queue
+    // consumer's batch insert dedupe a redelivered message. Null on rows from
+    // before this column existed, and on rows the daily sweep has cleared
+    // once no redelivery can reach them (sweepDedupeIds, #70).
+    // Migration 0027 owns the partial unique index because Drizzle cannot
+    // express its WHERE clause. It excludes every NULL, so swept rows carry no
+    // index weight and real dedupe ids still cannot clash.
+    dedupeId: text("dedupe_id"),
+    // Which address the click came in on (primary or an alias). Null on rows
+    // from before this column existed: not backfilled, same reasoning as
+    // dedupeId above. Link-level aggregates roll up by linkId regardless.
+    addressId: text("address_id").references(() => linkAddresses.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("idx_clicks_link_ts").on(t.linkId, t.ts),
+    index("idx_clicks_org_ts").on(t.orgId, t.ts),
+    index("idx_clicks_address_ts").on(t.addressId, t.ts),
+  ],
+);
+
+/**
+ * Click rollups (#26): what the stats pages and the links list read instead
+ * of raw clicks. Migration 0042 owns the tables (Drizzle cannot express
+ * WITHOUT ROWID) and says why they are shaped this way. insertClicks writes
+ * them; nothing else in the app does.
+ */
+export const clickDaily = sqliteTable(
+  "click_daily",
+  {
+    orgId: text("org_id").notNull(),
+    /** UTC 'YYYY-MM-DD'. */
+    day: text("day").notNull(),
+    linkId: text("link_id")
+      .notNull()
+      .references(() => links.id, { onDelete: "cascade" }),
+    clicks: integer("clicks").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.orgId, t.day, t.linkId] }),
+    index("idx_click_daily_link").on(t.linkId, t.day, t.clicks),
+  ],
+);
+
+export const CLICK_DIMENSIONS = ["country", "referrer", "device"] as const;
+
+export const clickDailyDims = sqliteTable(
+  "click_daily_dims",
+  {
+    orgId: text("org_id").notNull(),
+    dim: text("dim", { enum: CLICK_DIMENSIONS }).notNull(),
+    day: text("day").notNull(),
+    value: text("value").notNull(),
+    linkId: text("link_id")
+      .notNull()
+      .references(() => links.id, { onDelete: "cascade" }),
+    clicks: integer("clicks").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.orgId, t.dim, t.day, t.value, t.linkId] }),
+    index("idx_click_daily_dims_link").on(t.linkId, t.dim, t.day, t.value, t.clicks),
+  ],
+);
+
+export const clickHourly = sqliteTable(
+  "click_hourly",
+  {
+    orgId: text("org_id").notNull(),
+    /** Start of the UTC hour, in milliseconds. */
+    hour: integer("hour").notNull(),
+    linkId: text("link_id")
+      .notNull()
+      .references(() => links.id, { onDelete: "cascade" }),
+    clicks: integer("clicks").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.orgId, t.hour, t.linkId] }),
+    index("idx_click_hourly_link").on(t.linkId, t.hour, t.clicks),
+  ],
+);
+
+/**
+ * Tracked clicks per org per UTC month (#387): the exact count the plan's cap
+ * is checked against. Migration 0043 owns the table. insertClicks adds to it
+ * in the same batch as the raw rows and the rollups, counting only clicks it
+ * actually stored; the 10-minute cron reads it to send the 80% and 100%
+ * emails.
+ */
+export const orgClickUsage = sqliteTable(
+  "org_click_usage",
+  {
+    orgId: text("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    /** UTC 'YYYY-MM'. */
+    month: text("month").notNull(),
+    clicks: integer("clicks").notNull(),
+    /** The cap the 80% email went out for, null until it has. A cap rather
+     * than a timestamp, so a mid-month plan change earns the new cap its own
+     * email instead of being silenced by the old one's. */
+    warnedLimit: integer("warned_limit"),
+    /** The same, for the 100% email. */
+    cappedLimit: integer("capped_limit"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.orgId, t.month] }),
+    index("idx_org_click_usage_month").on(t.month, t.clicks),
+  ],
+);
+
+/**
+ * Clicks dropped past an org's monthly cap, per link per UTC minute
+ * (migration 0044). Only the abuse sweep reads it, so the 24-hour ceiling and
+ * the burst checks still see an org's traffic once it stops being stored. See
+ * click-overflow.ts.
+ */
+export const clickOverflow = sqliteTable(
+  "click_overflow",
+  {
+    /** Start of the UTC minute, ms. */
+    minute: integer("minute").notNull(),
+    orgId: text("org_id").notNull(),
+    linkId: text("link_id").notNull(),
+    clicks: integer("clicks").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.minute, t.orgId, t.linkId] })],
+);
+
+/** Calls to Google Web Risk per UTC day, site-wide (migration 0047). See
+ * takeWebRiskLookup in risk.ts. */
+export const webRiskUsage = sqliteTable("web_risk_usage", {
+  /** Days since the Unix epoch, UTC. */
+  day: integer("day").primaryKey(),
+  lookups: integer("lookups").notNull(),
+});
+
+/**
+ * Links made on the landing page by someone with no account (Direction A of
+ * #96). Deliberately unrelated to `orgs`, `user` and `links`: at the moment a
+ * row is written, none of those exist for this visitor.
+ *
+ * Claiming one at signup moves it into `links` properly and deletes the row,
+ * so nothing downstream ever sees a half-owned link. Anything unclaimed
+ * expires in 24 hours and the daily sweep removes it.
+ */
+export const anonLinks = sqliteTable(
+  "anon_links",
+  {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull().unique(),
+    destination: text("destination").notNull(),
+    /** Bearer proof of "I am the browser that made this". Single-use. */
+    claimToken: text("claim_token").notNull().unique(),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    riskScore: integer("risk_score"),
+    riskReasons: text("risk_reasons"),
+    riskCheckedAt: integer("risk_checked_at"),
+    riskProvider: text("risk_provider"),
+    /** A total only, for "3 clicks so far". No country, referrer or device. */
+    clicks: integer("clicks").notNull().default(0),
+  },
+  (t) => [index("idx_anon_links_expires").on(t.expiresAt)],
+);
+
+/**
+ * Storage work D1 committed and the queue did not (#118).
+ *
+ * The queue is the fast path and stays that way. A row lands here only when
+ * `sendBatch` failed outright, or when a message exhausted every delivery, so
+ * a change that would otherwise be lost is instead applied late by the daily
+ * drain. The one exception is `pending`: an `org_sync` written in the same
+ * batch as the change that needs it (`queueOrgSyncs`) and deleted once the
+ * request has published the org (`publishOrgSyncs`), because the keys it
+ * stands for are only read once that work is under way.
+ *
+ * It carries no payload beyond the op and its target. Every storage message
+ * is desired-state: the consumer reads D1 and writes what it finds, so
+ * re-deriving the value when the drain runs is both simpler and more correct
+ * than replaying one captured at the time of the failure.
+ */
+export const storageOutbox = sqliteTable(
+  "storage_outbox",
+  {
+    id: text("id").primaryKey(),
+    op: text("op", { enum: ["kv_sync", "r2_delete", "r2_delete_prefix", "org_sync"] }).notNull(),
+    target: text("target").notNull(),
+    reason: text("reason", { enum: ["send_failed", "gave_up", "pending"] }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error").notNull().default(""),
+  },
+  // The drain's ordering index is an expression over created_at and attempts,
+  // which drizzle cannot express; it lives in migration 0026.
+  (t) => [uniqueIndex("idx_storage_outbox_target").on(t.op, t.target)],
+);
+
+/**
+ * Scoped API keys (#131, minimal form): the credential a remote caller with
+ * no browser session (an MCP client, #139) authenticates with. Bound to a
+ * user, exactly like a session — requireOrgRole still decides what the key
+ * may do in each org the user belongs to, so this carries no scopes of its
+ * own yet. Only the hash is stored; the raw key is shown once, at creation.
+ */
+export const apiKeys = sqliteTable(
+  "api_keys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    keyHash: text("key_hash").notNull().unique(),
+    /** Shown in the UI so a person can tell keys apart without the raw value. */
+    keyPrefix: text("key_prefix").notNull(),
+    createdAt: integer("created_at").notNull(),
+    lastUsedAt: integer("last_used_at"),
+    revokedAt: integer("revoked_at"),
+  },
+  (t) => [index("idx_api_keys_user").on(t.userId)],
+);
+
+/* ---------------- MCP OAuth (#139 follow-up) ---------------- */
+// Shapes follow @better-auth/mcp's (jwt + oauth-provider + cimd) own schema,
+// dumped via `getSchema()` from those plugins' config rather than guessed:
+// see the PR that added this block for the exact field list. `id` on every
+// table below is better-auth's own generated primary key, the same
+// convention as user/session/account/verification above.
+
+/** Signing keys the jwt plugin rotates in; mcp() uses them for access and ID
+ * tokens, and serves the public half at /api/auth/jwks. */
+export const jwks = sqliteTable("jwks", {
+  id: text("id").primaryKey(),
+  publicKey: text("public_key").notNull(),
+  privateKey: text("private_key").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+  alg: text("alg"),
+  crv: text("crv"),
+});
+
+/** An MCP client, one row per `client_id`: discovered from a Client ID
+ * Metadata Document (cimd, `clientDiscoveryId` set), registered anonymously
+ * at `/oauth2/register` (DCR: `clientDiscoveryId`, `userId` and
+ * `referenceId` all null), or created by a signed-in user (`userId` set).
+ * sweepAbandonedOAuthClients() deletes DCR rows that never got a grant. */
+export const oauthClient = sqliteTable(
+  "oauth_client",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id").notNull().unique(),
+    clientSecret: text("client_secret"),
+    clientDiscoveryId: text("client_discovery_id"),
+    disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
+    skipConsent: integer("skip_consent", { mode: "boolean" }),
+    enableEndSession: integer("enable_end_session", { mode: "boolean" }),
+    subjectType: text("subject_type"),
+    scopes: text("scopes", { mode: "json" }).$type<string[]>(),
+    clientCredentialsScopes: text("client_credentials_scopes", { mode: "json" })
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    userId: text("user_id").references(() => user.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+    name: text("name"),
+    uri: text("uri"),
+    icon: text("icon"),
+    contacts: text("contacts", { mode: "json" }).$type<string[]>(),
+    tos: text("tos"),
+    policy: text("policy"),
+    softwareId: text("software_id"),
+    softwareVersion: text("software_version"),
+    softwareStatement: text("software_statement"),
+    redirectUris: text("redirect_uris", { mode: "json" }).$type<string[]>().notNull(),
+    postLogoutRedirectUris: text("post_logout_redirect_uris", { mode: "json" }).$type<string[]>(),
+    backchannelLogoutUri: text("backchannel_logout_uri"),
+    backchannelLogoutSessionRequired: integer("backchannel_logout_session_required", {
+      mode: "boolean",
+    }),
+    tokenEndpointAuthMethod: text("token_endpoint_auth_method"),
+    applicationType: text("application_type"),
+    jwks: text("jwks"),
+    jwksUri: text("jwks_uri"),
+    grantTypes: text("grant_types", { mode: "json" }).$type<string[]>(),
+    responseTypes: text("response_types", { mode: "json" }).$type<string[]>(),
+    requirePKCE: integer("require_pkce", { mode: "boolean" }),
+    dpopBoundAccessTokens: integer("dpop_bound_access_tokens", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    referenceId: text("reference_id"),
+    metadata: text("metadata", { mode: "json" }),
+  },
+  (t) => [index("idx_oauth_client_user").on(t.userId)],
+);
+
+/** A protected resource this authorization server issues tokens for. One row
+ * (the MCP endpoint itself, `mcpResource()` in mcp-oauth.ts); the table
+ * exists because the plugin supports more than one resource server, not
+ * because this app has more than one yet. */
+export const oauthResource = sqliteTable("oauth_resource", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull().unique(),
+  name: text("name").notNull(),
+  accessTokenTtl: integer("access_token_ttl"),
+  refreshTokenTtl: integer("refresh_token_ttl"),
+  signingAlgorithm: text("signing_algorithm"),
+  signingKeyId: text("signing_key_id"),
+  allowedScopes: text("allowed_scopes", { mode: "json" }).$type<string[]>(),
+  customClaims: text("custom_claims", { mode: "json" }),
+  dpopBoundAccessTokensRequired: integer("dpop_bound_access_tokens_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  policyVersion: integer("policy_version").notNull().default(1),
+  metadata: text("metadata", { mode: "json" }),
+});
+
+/** Which resources a client is allowed to request tokens for. */
+export const oauthClientResource = sqliteTable(
+  "oauth_client_resource",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthClient.clientId, { onDelete: "cascade" }),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => oauthResource.identifier, { onDelete: "cascade" }),
+    metadata: text("metadata", { mode: "json" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [
+    index("idx_oauth_client_resource_client").on(t.clientId),
+    index("idx_oauth_client_resource_resource").on(t.resourceId),
+    uniqueIndex("idx_oauth_client_resource_pair").on(t.clientId, t.resourceId),
+  ],
+);
+
+/** A minted refresh token: exchanging it re-issues an access token without
+ * the user going through consent again. `revoked`/`rotatedAt` are set, not
+ * deleted, so a reused rotated token can still be recognized as reuse. */
+export const oauthRefreshToken = sqliteTable(
+  "oauth_refresh_token",
+  {
+    id: text("id").primaryKey(),
+    token: text("token").notNull().unique(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthClient.clientId),
+    sessionId: text("session_id").references(() => session.id, { onDelete: "set null" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    referenceId: text("reference_id"),
+    authorizationCodeId: text("authorization_code_id"),
+    resources: text("resources", { mode: "json" }).$type<string[]>(),
+    requestedUserInfoClaims: text("requested_user_info_claims", { mode: "json" }).$type<string[]>(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }),
+    revoked: integer("revoked", { mode: "timestamp_ms" }),
+    rotatedAt: integer("rotated_at", { mode: "timestamp_ms" }),
+    rotationReplayResponse: text("rotation_replay_response"),
+    rotationReplayExpiresAt: integer("rotation_replay_expires_at", { mode: "timestamp_ms" }),
+    authTime: integer("auth_time", { mode: "timestamp_ms" }),
+    confirmation: text("confirmation", { mode: "json" }),
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull(),
+  },
+  (t) => [
+    index("idx_oauth_refresh_token_client").on(t.clientId),
+    index("idx_oauth_refresh_token_session").on(t.sessionId),
+    index("idx_oauth_refresh_token_user").on(t.userId),
+    index("idx_oauth_refresh_token_auth_code").on(t.authorizationCodeId),
+  ],
+);
+
+/** A minted access token: what session.ts verifies (as a JWT, against
+ * /api/auth/jwks) on every MCP request. This row is what makes it revocable
+ * before its natural expiry — the JWT itself carries no revocation check. */
+export const oauthAccessToken = sqliteTable(
+  "oauth_access_token",
+  {
+    id: text("id").primaryKey(),
+    token: text("token").unique(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthClient.clientId),
+    sessionId: text("session_id").references(() => session.id, { onDelete: "set null" }),
+    userId: text("user_id").references(() => user.id),
+    referenceId: text("reference_id"),
+    authorizationCodeId: text("authorization_code_id"),
+    resources: text("resources", { mode: "json" }).$type<string[]>(),
+    requestedUserInfoClaims: text("requested_user_info_claims", { mode: "json" }).$type<string[]>(),
+    refreshId: text("refresh_id").references(() => oauthRefreshToken.id),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }),
+    revoked: integer("revoked", { mode: "timestamp_ms" }),
+    confirmation: text("confirmation", { mode: "json" }),
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull(),
+  },
+  (t) => [
+    index("idx_oauth_access_token_client").on(t.clientId),
+    index("idx_oauth_access_token_session").on(t.sessionId),
+    index("idx_oauth_access_token_user").on(t.userId),
+    index("idx_oauth_access_token_auth_code").on(t.authorizationCodeId),
+    index("idx_oauth_access_token_refresh").on(t.refreshId),
+  ],
+);
+
+/** One row per (client, user): what "Connected apps" reads and deletes from
+ * (api-keys.tsx). Revoking here is what the oauth-provider plugin uses to
+ * cascade-kill every access and refresh token the grant produced. */
+export const oauthConsent = sqliteTable(
+  "oauth_consent",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthClient.clientId),
+    userId: text("user_id").references(() => user.id),
+    referenceId: text("reference_id"),
+    resources: text("resources", { mode: "json" }).$type<string[]>(),
+    requestedUserInfoClaims: text("requested_user_info_claims", { mode: "json" }).$type<string[]>(),
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [
+    index("idx_oauth_consent_client").on(t.clientId),
+    index("idx_oauth_consent_user").on(t.userId),
+  ],
+);
+
+/** Replay protection for `private_key_jwt` client assertions: one row per
+ * assertion `jti`, kept only until it expires. Unused until a client
+ * authenticates with a signed JWT instead of a client secret — none do yet. */
+export const oauthClientAssertion = sqliteTable("oauth_client_assertion", {
+  id: text("id").primaryKey(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+});

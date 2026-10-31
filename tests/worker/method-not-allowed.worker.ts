@@ -1,0 +1,54 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createExecutionContext, reset, waitOnExecutionContext } from "cloudflare:test";
+import worker from "../../src/worker";
+import { applyTestMigrations, testEnv } from "./support";
+
+async function call(method: string, path: string): Promise<Response> {
+  const ctx = createExecutionContext();
+  const response = await worker.fetch(
+    new Request(`http://localhost${path}`, { method }),
+    testEnv,
+    ctx,
+  );
+  await waitOnExecutionContext(ctx);
+  return response;
+}
+
+describe("wrong method, wrong path", () => {
+  // Every request here reaches withSession, which now resolves the auth
+  // instance's oauth-provider bookkeeping (the MCP OAuth plugin, #139
+  // follow-up) even for a route with nothing to do with it — migrated, or
+  // every one of these 500s before it gets anywhere near the routing this
+  // file actually tests.
+  beforeEach(applyTestMigrations);
+  afterEach(reset);
+
+  it("answers 405 and names the methods the path does take", async () => {
+    // /api/orgs is POST-only, so GET has to say so rather than serve the SPA.
+    const res = await call("GET", "/api/orgs");
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")).toBe("POST");
+    expect(await res.json()).toEqual({ message: "Method not allowed" });
+  });
+
+  it("keeps the auth routes' own pair of methods", async () => {
+    const res = await call("DELETE", "/api/auth/sign-in/email");
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")?.split(", ").sort()).toEqual(["GET", "HEAD", "POST"]);
+  });
+
+  it("answers an unknown API path with JSON, not the SPA", async () => {
+    const res = await call("GET", "/api/nothing-here");
+    expect(res.status).toBe(404);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    expect(await res.json()).toEqual({ message: "Not found" });
+  });
+
+  it("answers a bare /api without crashing on the missing wide-event logger", async () => {
+    // `/api/*` matches `/api`, but evlog's include globs don't, so `log` is
+    // absent here (RDYRCT-9): the fallback must not call `.set` on it.
+    const res = await call("GET", "/api");
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ message: "Not found" });
+  });
+});

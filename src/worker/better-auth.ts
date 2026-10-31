@@ -1,0 +1,686 @@
+import { betterAuth } from "better-auth";
+import type { JsonValue } from "../shared/types";
+import { optionalText, parseOptionalBody } from "./schemas";
+import * as v from "valibot";
+import { lookup } from "../shared/lookup";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { emailOTP } from "better-auth/plugins/email-otp";
+import { genericOAuth } from "better-auth/plugins/generic-oauth";
+import { jwt } from "better-auth/plugins/jwt";
+import { mcp } from "@better-auth/mcp";
+import { cimd } from "@better-auth/cimd";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzle } from "drizzle-orm/d1";
+import { and, eq } from "drizzle-orm";
+import * as schema from "./db/schema";
+import type { DB, Env } from "./env";
+import { captureAlert } from "./sentry";
+import { afterResponse } from "./background";
+import { sendWelcomeOnce } from "./welcome";
+import { emailConfigured, sendEmail } from "./email";
+import { NOTICE_FOOTER, renderEmail } from "./email-layout";
+import { hashPassword, verifyPassword } from "./password";
+import { uid } from "./util";
+import { spendToken, type TurnstileScope } from "./turnstile";
+import { storeUserAvatar, deleteUserAvatar } from "./storage";
+import { createOwnedOrg } from "./plan";
+import { defaultOrgName } from "@/shared/org-name";
+import { TURNSTILE_FAILED_CODE, TURNSTILE_TOKEN_HEADER } from "@/shared/types";
+import { mcpResource, fetchClientMetadataResource } from "./mcp-oauth";
+import { HTTPException } from "hono/http-exception";
+import { endSubscriptionBeforeDelete } from "./routes/billing";
+import { logFailure } from "./log-failure";
+
+const SUBSCRIPTION_NOT_ENDED =
+  "We could not cancel the subscription, so the account was not deleted. Try again in a few minutes.";
+
+/** better-auth paths that must carry a Turnstile token, and the scope the
+ * token has to have been rendered for. Keyed by `ctx.path`, which is relative
+ * to /api/auth. */
+const TURNSTILE_GUARDED_PATHS = {
+  "/sign-up/email": "signup",
+  "/request-password-reset": "password-reset",
+} satisfies Record<string, TurnstileScope>;
+
+/**
+ * Gives an account an organization if it has none.
+ *
+ * Every account owns one from the moment it can sign in, so "no organization"
+ * is a state somebody chose (they deleted their last one) rather than the
+ * state everybody starts in. The empty-state screen used to make the
+ * organization while telling the person it already existed; now it is true
+ * when they read it, and Settings can rename it the same second.
+ *
+ * On session creation rather than user creation: a signup that never gets
+ * past the six-digit code leaves nothing behind, so admin usage counts stay
+ * about real accounts. The cost is one indexed read per sign-in.
+ *
+ * Failure is swallowed on purpose. Nobody should be locked out of an account
+ * because an organization could not be written, and the client still carries
+ * the create-organization form for exactly that case.
+ */
+async function ensureOrganization(env: Env, db: DB, userId: string): Promise<void> {
+  try {
+    const owned = await db
+      .select({ orgId: schema.orgMembers.orgId })
+      .from(schema.orgMembers)
+      .where(and(eq(schema.orgMembers.userId, userId), eq(schema.orgMembers.role, "owner")))
+      .limit(1);
+    if (owned.length > 0) return;
+
+    const rows = await db
+      .select({ email: schema.user.email, name: schema.user.name })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId));
+    const account = rows[0];
+    if (!account) return;
+
+    await createOwnedOrg(db, env, {
+      orgId: uid(),
+      userId,
+      name: defaultOrgName(account.email, account.name ?? undefined),
+      ts: Date.now(),
+      // One, not the plan's allowance. createOwnedOrg writes the membership
+      // only while the owner is under the limit it is given, in a single
+      // statement, so a limit of one is what makes this "give them an
+      // organization if they have none" rather than "if they have room".
+      // The read above is a fast path, not the guard: two sessions created
+      // at once both see nothing, and on Pro, where the allowance is three,
+      // both would otherwise have room and the account would arrive with two
+      // organizations and no way to tell which is theirs.
+      ownedOrgLimit: 1,
+    });
+  } catch (error) {
+    logFailure("default_org_failed", error);
+  }
+}
+
+/**
+ * Deletes an account and flags every organization it owns in one D1 act.
+ *
+ * An org has no plan of its own: `orgPlan()` reads its owner's. Leaving one
+ * behind with no owner leaves it with no plan, no billing and nobody who can
+ * delete it, so every owned org goes too. Settings names them before it asks.
+ *
+ * Better Auth calls this after it has checked the session and password, then
+ * issues its own idempotent user delete. Doing the real delete here closes the
+ * gap between starting destructive workflows and deleting the account: if D1
+ * refuses either write, it rolls both back and no teardown starts (#119).
+ *
+ * The first statement captures the exact ownership set inside the same batch
+ * that flags it and deletes the user. A membership change before the batch is
+ * included; one after it cannot attach to the deleted user. Workflow starts
+ * come last. If that call fails, the account is still gone and the durable
+ * flags let the stalled-deletion sweep finish the work.
+ *
+ * A paying account ends its Polar subscription first (#337). When Polar cannot
+ * do that, nothing is deleted and this throws a 503, so the person can try
+ * again rather than keep paying for an account that no longer exists.
+ */
+export async function deleteAccountAndOwnedOrgs(env: Env, userId: string): Promise<void> {
+  if (!(await endSubscriptionBeforeDelete(env, userId))) {
+    throw new HTTPException(503, { message: SUBSCRIPTION_NOT_ENDED });
+  }
+  await deleteUserAvatar(env, userId);
+  const now = Date.now();
+  const [owned] = await env.DB.batch<{ orgId: string }>([
+    env.DB.prepare(
+      "select org_id as orgId from org_members where user_id = ? and role = 'owner'",
+    ).bind(userId),
+    env.DB.prepare(
+      `update orgs set deleting_at = ?
+       where deleting_at is null and id in (
+         select org_id from org_members where user_id = ? and role = 'owner'
+       )`,
+    ).bind(now, userId),
+    env.DB.prepare("delete from user where id = ?").bind(userId),
+  ]);
+  const orgIds = owned.results.map((row) => row.orgId);
+  if (orgIds.length === 0) return;
+  try {
+    await env.ORG_DELETE.createBatch(orgIds.map((orgId) => ({ id: orgId, params: { orgId } })));
+  } catch (error) {
+    captureAlert([{ event: "account_org_delete_start_failed", userId, count: orgIds.length }]);
+    logFailure("account_org_delete_start_failed", error, { userId });
+  }
+}
+
+const DNS_CHECK_TIMEOUT = 3000;
+
+async function domainHasMailRecords(domain: string): Promise<boolean> {
+  try {
+    const resp = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=MX`,
+      {
+        headers: { accept: "application/dns-json" },
+        signal: AbortSignal.timeout(DNS_CHECK_TIMEOUT),
+      },
+    );
+    if (!resp.ok) return false;
+    // SAFETY: DNS-over-HTTPS answers this shape per RFC 8484's JSON form,
+    // and every field read below is guarded before it is used.
+    const data = (await resp.json()) as {
+      Status: number;
+      Answer?: { type: number }[];
+    };
+    if (data.Status !== 0) return false;
+    if (data.Answer?.some((r) => r.type === 15)) return true;
+    // No MX records: RFC 5321 says fall back to A/AAAA records for mail delivery.
+    const aResp = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`,
+      {
+        headers: { accept: "application/dns-json" },
+        signal: AbortSignal.timeout(DNS_CHECK_TIMEOUT),
+      },
+    );
+    if (!aResp.ok) return false;
+    // SAFETY: the same JSON DNS shape as above, from the same resolver.
+    const aData = (await aResp.json()) as {
+      Status: number;
+      Answer?: unknown[];
+    };
+    return aData.Status === 0 && (aData.Answer?.length ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+function makeDb(env: Env) {
+  return drizzle(env.DB, { schema });
+}
+type Db = ReturnType<typeof makeDb>;
+
+/**
+ * Unauthenticated: anyone can post any address here. An already-verified
+ * account must never receive a code, because verification auto-signs-in
+ * (autoSignInAfterVerification), so a code would hand a full session to
+ * whoever reads that inbox rather than merely confirm ownership.
+ *
+ * It answers as though it sent one anyway. Saying "already verified" told
+ * an anonymous caller which addresses have verified accounts, one address
+ * per request (#53). The reply is byte-identical to a real send; what
+ * differs is that nothing goes out.
+ */
+/** What the two guarded better-auth endpoints are read for. Each field is
+ * whatever arrived, reduced to the string the guard needs or to "". */
+const otpSendBodySchema = v.object({ email: optionalText, type: optionalText });
+const signUpBodySchema = v.object({ email: optionalText, name: optionalText });
+
+/**
+ * The request body better-auth is about to act on.
+ *
+ * better-auth types its hook context's body as unknown, because each of its
+ * endpoints has a different one. The guards below parse what they read, so
+ * this only has to get it as far as JSON.
+ */
+function bodyOf(ctx: { body?: unknown }): JsonValue {
+  // SAFETY: better-auth parsed this out of a JSON request body, so it is JSON;
+  // the schemas below are what decide it is the right JSON.
+  return (ctx.body ?? {}) as JsonValue;
+}
+
+async function guardVerificationOTPSend(db: Db, rawBody: JsonValue) {
+  const body = parseOptionalBody(otpSendBodySchema, rawBody);
+  if (body.type !== "email-verification" || !body.email) return;
+  const [existing] = await db
+    .select({ emailVerified: schema.user.emailVerified })
+    .from(schema.user)
+    .where(eq(schema.user.email, body.email.toLowerCase()));
+  return existing?.emailVerified ? { success: true } : undefined;
+}
+
+/**
+ * The reply a real signup gives when verification is still pending,
+ * rebuilt from the caller's own input.
+ *
+ * Every field is either theirs (email, name), a fresh value (a new id, the
+ * current time), or the column default a new row would carry, so it matches
+ * a genuine response field for field. A shape that differed would be the
+ * same oracle in a new place.
+ */
+function pendingSignUpResponse(email: string, name: string) {
+  const timestamp = new Date().toISOString();
+  return {
+    token: null,
+    user: {
+      name,
+      email,
+      emailVerified: false,
+      image: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      isAdmin: false,
+      banned: false,
+      plan: "free",
+      polarSubscriptionCancelAtPeriodEnd: false,
+      polarSubscriptionCurrentPeriodEnd: null,
+      polarSubscriptionInterval: null,
+      // Never the existing row's id: this account is not the caller's to
+      // learn anything about. Same alphabet and length as better-auth's.
+      id: uid(32),
+    },
+  };
+}
+
+/** Tells the address's real owner that someone tried to sign up as them. */
+async function sendExistingAccountNotice(env: Env, email: string) {
+  await sendEmail(
+    env,
+    email,
+    "Someone tried to sign up with your rdyrct address",
+    renderEmail(
+      {
+        preheader: "You already have an rdyrct account.",
+        heading: "Someone tried to sign up with your address",
+        paragraphs: [
+          "Someone just tried to create an rdyrct account with this address. Nothing changed, and no new account was made.",
+          "If that was you, sign in instead. If you cannot remember your password, reset it.",
+        ],
+        cta: { label: "Sign in", url: `${env.APP_URL}/login` },
+        note: "If this was not you, you can ignore this email. Nobody can use your address without reading this inbox.",
+        footerLine: NOTICE_FOOTER,
+      },
+      env.APP_URL,
+      email,
+    ),
+  );
+}
+
+/**
+ * Signup used to answer a taken address with a plain USER_ALREADY_EXISTS,
+ * which let anyone test addresses one at a time (#53). It now answers as it
+ * would for a new account and creates nothing, and the address's real owner
+ * gets an email saying so, since they are the only person entitled to know.
+ *
+ * That email carries no code and no session, which is the part better-auth's
+ * own disguise got wrong for us: its version let the form walk on to the OTP
+ * screen, mail a working code, and sign the visitor into the existing
+ * account while the password they had just typed went nowhere.
+ *
+ * The cost is real and worth stating: someone who forgot they had an account
+ * no longer learns it on screen. They learn it in the inbox they own.
+ */
+async function guardSignUp(
+  env: Env,
+  db: Db,
+  rawBody: JsonValue,
+): Promise<ReturnType<typeof pendingSignUpResponse> | undefined> {
+  const body = parseOptionalBody(signUpBodySchema, rawBody);
+  if (!body.email) return;
+  const normalized = body.email.toLowerCase();
+
+  // Before the existence check, so both branches answer a dead domain the
+  // same way. Reversed, a 422 here would mean "no account on a domain that
+  // cannot receive mail", and a success would mean "there is one".
+  const domain = normalized.split("@")[1];
+  if (domain && !(await domainHasMailRecords(domain)))
+    throw new APIError(422, {
+      message: "Enter a valid email address.",
+      code: "INVALID_EMAIL_DOMAIN",
+    });
+
+  const [existing] = await db
+    .select({ emailVerified: schema.user.emailVerified })
+    .from(schema.user)
+    .where(eq(schema.user.email, normalized));
+  if (!existing) return;
+
+  // Only for a verified account. An unverified one carries on through the
+  // OTP flow it was already in the middle of, and a code is on its way
+  // there anyway: two emails would say the same thing twice.
+  //
+  // Sent after the response, never inside it. Awaiting it leaked the answer
+  // twice over: a Resend outage made a registered address error while a free
+  // one succeeded, and even on a good day the extra round trip made the
+  // registered address measurably slower to answer. Both are the account
+  // probe #53 set out to close, rebuilt in the fix for it.
+  //
+  // The failure is swallowed and alerted instead. The owner missing one
+  // notice is the smaller loss, and we still hear about it even though they
+  // did not.
+  if (existing.emailVerified)
+    afterResponse(
+      sendExistingAccountNotice(env, normalized).catch((cause: unknown) =>
+        captureAlert([
+          { event: "existing_account_notice_failed", error: String(cause) },
+          // Deliberately no address: this log would otherwise be a list of
+          // registered emails, which is the thing being protected.
+        ]),
+      ),
+    );
+
+  const name = body.name || normalized.split("@")[0];
+  return pendingSignUpResponse(normalized, name);
+}
+
+function buildAuth(env: Env) {
+  const db = makeDb(env);
+  return betterAuth({
+    baseURL: env.APP_URL,
+    basePath: "/api/auth",
+    secret: env.BETTER_AUTH_SECRET,
+    trustedOrigins: [env.APP_URL],
+    database: drizzleAdapter(db, {
+      provider: "sqlite",
+      schema: {
+        user: schema.user,
+        session: schema.session,
+        account: schema.account,
+        verification: schema.verification,
+        jwks: schema.jwks,
+        oauthClient: schema.oauthClient,
+        oauthResource: schema.oauthResource,
+        oauthClientResource: schema.oauthClientResource,
+        oauthRefreshToken: schema.oauthRefreshToken,
+        oauthAccessToken: schema.oauthAccessToken,
+        oauthConsent: schema.oauthConsent,
+        oauthClientAssertion: schema.oauthClientAssertion,
+      },
+    }),
+    // Cloudflare Workers Rate Limiting bindings guard auth before BetterAuth.
+    // Keeping BetterAuth's per-isolate limiter enabled would create a second,
+    // inconsistent 429 shape and would not protect the rest of the app.
+    rateLimit: { enabled: false },
+    // One query for a session and its user, not two in a row. Every signed-in
+    // API call starts with that lookup, and each D1 round trip is ~25 ms.
+    advanced: { database: { joins: true } },
+    // Link a Google sign-in to an existing email/password account with the
+    // same (verified) address instead of creating a duplicate. Google is a
+    // trusted provider, so an unverified Google account still links to a
+    // verified local one — acceptable, since Google is the trusted IdP.
+    account: {
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["google"],
+        // Deliberately no updateUserInfoOnLink: linking Google must not
+        // overwrite a name the user set. A fresh Google signup still gets its
+        // picture (better-auth sets user.image on user creation, and
+        // session.create.after pulls it into R2); anyone else sets a picture
+        // from Settings.
+      },
+    },
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: emailConfigured(env),
+      // PBKDF2 via WebCrypto: native (fast) on Workers, unlike the default
+      // scrypt implementation which burns CPU budget.
+      password: {
+        hash: (password) => hashPassword(password),
+        verify: ({ hash, password }) => verifyPassword(password, hash),
+      },
+      sendResetPassword: async ({ user, url }) => {
+        await sendEmail(
+          env,
+          user.email,
+          "Reset your rdyrct password",
+          renderEmail(
+            {
+              preheader: "Reset your password. The link lasts one hour.",
+              heading: "Reset your password",
+              paragraphs: [
+                `Hi ${user.name},`,
+                "Someone asked to reset the password for this account.",
+              ],
+              cta: { label: "Reset your password", url },
+              note: "The link expires in one hour. If this was not you, ignore this email and nothing changes.",
+            },
+            env.APP_URL,
+            user.email,
+          ),
+        );
+      },
+    },
+    emailVerification: {
+      // The frontend is the single, deterministic sender of the verification
+      // OTP (it calls send-verification-otp when it shows the code screen), so
+      // suppress the implicit on-signup send that would otherwise fire and
+      // race and duplicate the email.
+      sendOnSignUp: false,
+      // Still create the session when the OTP verifies (auto-sign-in).
+      autoSignInAfterVerification: true,
+    },
+    // Email verification is a 6-digit OTP (not a link): the plugin's
+    // overrideDefaultEmailVerification routes the requireEmailVerification
+    // flow (including signup and unverified-login resends) through OTP.
+    // Password reset stays a link (see sendResetPassword above).
+    plugins: [
+      emailOTP({
+        otpLength: 6,
+        expiresIn: 60 * 10, // 10 minutes
+        overrideDefaultEmailVerification: true,
+        sendVerificationOnSignUp: true,
+        sendVerificationOTP: async ({ email, otp, type }) => {
+          if (type !== "email-verification") return;
+          // The already-verified case is rejected up front in hooks.before
+          // (see below): the plugin swallows whatever this callback returns
+          // or throws, so blocking there is the only way for the caller to
+          // learn "already verified" instead of waiting on a code that never
+          // arrives.
+          await sendEmail(
+            env,
+            email,
+            "Your rdyrct verification code",
+            renderEmail(
+              {
+                preheader: `${otp} is your rdyrct verification code.`,
+                heading: "Your verification code",
+                paragraphs: ["Enter this code to finish signing in."],
+                code: otp,
+                note: "The code expires in 10 minutes.",
+              },
+              env.APP_URL,
+              email,
+            ),
+          );
+        },
+      }),
+      // Google sign-in via the generic OAuth2 provider (not the built-in
+      // `google`, whose token endpoint is hardcoded and cannot be redirected
+      // at dev/emulate). Endpoints are env-driven: a discovery URL in prod, or
+      // explicit endpoints at the emulate Google emulator in dev. Only
+      // registered when credentials are present, so environments without
+      // Google config simply have no social login.
+      ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+        ? [
+            genericOAuth({
+              config: [
+                {
+                  providerId: "google",
+                  clientId: env.GOOGLE_CLIENT_ID,
+                  clientSecret: env.GOOGLE_CLIENT_SECRET,
+                  scopes: ["openid", "email", "profile"],
+                  ...(env.GOOGLE_EMULATOR_URL
+                    ? {
+                        authorizationUrl: `${env.GOOGLE_EMULATOR_URL}/o/oauth2/v2/auth`,
+                        tokenUrl: `${env.GOOGLE_EMULATOR_URL}/oauth2/token`,
+                        userInfoUrl: `${env.GOOGLE_EMULATOR_URL}/oauth2/v2/userinfo`,
+                      }
+                    : {
+                        discoveryUrl:
+                          "https://accounts.google.com/.well-known/openid-configuration",
+                      }),
+                },
+              ],
+            }),
+          ]
+        : []),
+      // MCP OAuth (#139 follow-up): turns this app into an OAuth 2.1
+      // authorization server for MCP clients, so a chatbot connects with a
+      // consent screen instead of a pasted API key. jwt() supplies the
+      // signing key mcp() uses for access tokens and the /jwks endpoint
+      // session.ts verifies them against. A client identifies itself one of
+      // two ways: cimd(), a URL to its own metadata (what the MCP spec
+      // prefers), or open dynamic client registration, which Claude, Cursor
+      // and VS Code still expect. Open registration is rate-limited with the
+      // other /api/auth routes, and sweepAbandonedOAuthClients() deletes the
+      // rows nobody ever consented to. Only the grants an MCP client uses:
+      // client_credentials would let a client act with no user behind it.
+      // No set-auth-jwt header: nothing reads it, and producing it read the
+      // signing keys from D1 and signed a token on every session lookup.
+      jwt({ disableSettingJwtHeader: true }),
+      mcp({
+        loginPage: "/login",
+        consentPage: "/consent",
+        resource: mcpResource(env),
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        grantTypes: ["authorization_code", "refresh_token"],
+      }),
+      cimd({
+        fetchClientMetadataResource,
+        metadataProfile: "mcp-2026-07-28",
+      }),
+    ],
+    user: {
+      additionalFields: {
+        isAdmin: { type: "boolean", defaultValue: false, input: false },
+        // Suspended by a platform admin; flipped only via the admin API.
+        banned: { type: "boolean", defaultValue: false, input: false },
+        // Per-user subscription; flipped by the Polar webhook, never by input.
+        plan: { type: "string", defaultValue: "free", input: false },
+        polarSubscriptionCancelAtPeriodEnd: {
+          type: "boolean",
+          defaultValue: false,
+          input: false,
+        },
+        polarSubscriptionCurrentPeriodEnd: {
+          type: "number",
+          defaultValue: null,
+          input: false,
+        },
+        polarSubscriptionInterval: { type: "string", required: false, input: false },
+      },
+      // Self-service account deletion. Authored links/invites keep working
+      // (ON DELETE SET NULL) and memberships cascade. Owned organizations are
+      // flagged in the same D1 batch that deletes the account, then torn down.
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user) => {
+          try {
+            await deleteAccountAndOwnedOrgs(env, user.id);
+          } catch (error) {
+            // better-auth answers anything but its own APIError with a bare 500.
+            if (error instanceof HTTPException && error.status === 503) {
+              throw new APIError("SERVICE_UNAVAILABLE", { message: SUBSCRIPTION_NOT_ENDED });
+            }
+            throw error;
+          }
+        },
+      },
+    },
+    hooks: {
+      // Returning a value here short-circuits: better-auth sends it as the
+      // response instead of running the endpoint. Both guards use that to
+      // answer exactly as the real path would while doing nothing (#53).
+      before: createAuthMiddleware(async (ctx) => {
+        // Turnstile (#304) sits in front of the two paths a bot actually wants:
+        // creating accounts, and making us send mail. Not login, where a bot
+        // with correct credentials is not the threat and every real visitor
+        // would pay the tax.
+        const capScope = lookup(TURNSTILE_GUARDED_PATHS, ctx.path);
+        if (capScope) {
+          // In a header, not the body: better-auth validates each endpoint's
+          // body against its own schema, and an extra key there is at the
+          // mercy of that schema.
+          const token = ctx.headers?.get(TURNSTILE_TOKEN_HEADER) ?? "";
+          if (!(await spendToken(env, capScope, token)))
+            // A code, not just a message: the browser retries this once with
+            // a freshly solved token, and matching on prose to decide that
+            // would break the first time the wording changed.
+            throw new APIError("BAD_REQUEST", {
+              code: TURNSTILE_FAILED_CODE,
+              message: "Could not verify you are human. Reload the page and try again.",
+            });
+        }
+        if (ctx.path === "/email-otp/send-verification-otp") {
+          return guardVerificationOTPSend(db, bodyOf(ctx));
+        }
+        if (ctx.path === "/sign-up/email") {
+          return guardSignUp(env, db, bodyOf(ctx));
+        }
+      }),
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          // The superadmin is pinned by secret: the account signing up with
+          // SUPERADMIN_EMAIL is the platform admin (and always lands on Pro,
+          // so all Pro-gated features are reachable). No first-signup rule.
+          before: async (user) => {
+            const isSuper = user.email.toLowerCase() === env.SUPERADMIN_EMAIL.toLowerCase();
+            return {
+              data: {
+                ...user,
+                isAdmin: isSuper,
+                plan: isSuper ? "pro" : "free",
+              },
+            };
+          },
+          // Google accounts arrive verified, so the welcome goes out here.
+          after: async (user) => {
+            afterResponse(sendWelcomeOnce(env, db, user));
+          },
+        },
+        // A password account is verified by an update, not at creation. The
+        // claim inside sendWelcomeOnce makes every later update a no-op.
+        update: {
+          after: async (user) => {
+            afterResponse(sendWelcomeOnce(env, db, user));
+          },
+        },
+      },
+      session: {
+        create: {
+          // Banned accounts can't start a session (existing ones are wiped by
+          // the ban). Throwing aborts creation with this message on sign-in.
+          before: async (session) => {
+            const rows = await db
+              .select({ banned: schema.user.banned })
+              .from(schema.user)
+              .where(eq(schema.user.id, session.userId));
+            if (rows[0]?.banned)
+              throw new APIError(403, {
+                message: "This account has been suspended.",
+              });
+          },
+          after: async (session) => {
+            await ensureOrganization(env, db, session.userId);
+            // Re-sync the avatar from Google on every Google sign-in. The OAuth
+            // path refreshes `user.image` to the latest remote URL each time, so
+            // pulling it into R2 here covers both first link and later changes.
+            // Password users already carry the same-origin serving URL and are
+            // skipped. Runs after the org ensure so a brand-new Google user
+            // also gets an org. Any failure here must not abort sign-in, so it
+            // is swallowed: the blobatar stays and re-sync runs next login.
+            try {
+              const [row] = await db
+                .select({ image: schema.user.image })
+                .from(schema.user)
+                .where(eq(schema.user.id, session.userId));
+              if (row?.image?.startsWith("http")) {
+                const serving = await storeUserAvatar(env, session.userId, row.image);
+                if (serving)
+                  await db
+                    .update(schema.user)
+                    .set({ image: serving })
+                    .where(eq(schema.user.id, session.userId));
+              }
+            } catch {
+              // keep the session; the avatar simply stays unset
+            }
+          },
+        },
+      },
+    },
+  });
+}
+
+export type Auth = ReturnType<typeof buildAuth>;
+
+// Bindings are stable per isolate, so one instance serves every request.
+let cached: Auth | null = null;
+
+export function getAuth(env: Env): Auth {
+  cached ??= buildAuth(env);
+  return cached;
+}

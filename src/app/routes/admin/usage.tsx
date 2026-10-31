@@ -1,0 +1,252 @@
+import type { ReactNode } from "react";
+import { useAdminUsage } from "../../lib/hooks";
+import { AreaChart, BarList, StatCard } from "../../components/charts";
+import { Badge, Card, PageHeader, Table, Th, Td } from "../../ui/misc";
+import { AdminUsageSkeleton } from "../../components/skeletons";
+import { linkLabel } from "./util";
+import type { AdminUsage, OrgPlan } from "@/shared/types";
+import { orgPlanOf } from "@/shared/types";
+import { shortDate } from "../../lib/dates";
+import { formatNumber } from "../../lib/numbers";
+
+const planColor = (p: OrgPlan) => (p === "pro" ? "accent" : p === "hobby" ? "mint" : "muted");
+
+function AdminTableCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Card className="lg:col-span-2">
+      <p className="mb-3 text-xs font-medium text-muted">{title}</p>
+      <Table>{children}</Table>
+    </Card>
+  );
+}
+
+/**
+ * Access and money are separate questions (#82). "Paid users" is who actually
+ * pays, comps excluded; "Subscribers" is how many people hold a real Polar
+ * subscription. No money here: Polar knows what it charged, net of discounts,
+ * tax and refunds, so revenue is read there.
+ */
+function BusinessStats({ s }: { s: AdminUsage }) {
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <StatCard label="Users" value={s.users} />
+      <StatCard label="Paid users" value={s.payingUsers} />
+      <StatCard label="Subscribers" value={s.payingSubscribers} />
+      <StatCard label="Signups · 7d" value={s.signups7d} delta={s.signups7dDelta} />
+      <StatCard label="Weekly active users" value={s.wau} />
+    </div>
+  );
+}
+
+function ResourceStats({ s }: { s: AdminUsage }) {
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <StatCard label="Orgs" value={s.orgs} />
+      <StatCard label="Links" value={s.links} />
+      <StatCard label="Clicks" value={s.clicks} />
+      <StatCard label="Clicks · 7d" value={s.clicks7d} />
+      {/* Against the cap the Worker enforces, and Google's free 100,000 a month. */}
+      <StatCard
+        label="Google lookups · today"
+        value={s.webRisk.today}
+        suffix={` / ${formatNumber(s.webRisk.perDay)}`}
+      />
+      <StatCard
+        label="Google lookups · month"
+        value={s.webRisk.month}
+        suffix={` / ${formatNumber(100_000)}`}
+      />
+    </div>
+  );
+}
+
+function BusinessRow({ s }: { s: AdminUsage }) {
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      <Card>
+        <p className="mb-3 text-xs font-medium text-muted">Plan mix</p>
+        <BarList
+          items={[
+            { key: "Free", clicks: s.planCounts.free },
+            { key: "Hobby", clicks: s.planCounts.hobby },
+            { key: "Pro", clicks: s.planCounts.pro },
+          ]}
+        />
+        {/* Comped belongs here rather than in a bar of its own: a comp is not
+            a fourth plan, it is how some of the Hobby and Pro rows above were
+            paid for, so a bar would count those people twice. */}
+        <p className="mt-3 text-xs text-muted">
+          {s.paidConversionRate !== null && `${s.paidConversionRate}% paid conversion · `}
+          {s.compedUsers} comped
+        </p>
+      </Card>
+      <Card>
+        <p className="mb-3 text-xs font-medium text-muted">Signups per day · 30d</p>
+        <AreaChart data={s.signups} />
+      </Card>
+      <Card>
+        <p className="mb-3 text-xs font-medium text-muted">Cumulative users · 90d</p>
+        <AreaChart data={s.cumulativeUsers} />
+      </Card>
+    </div>
+  );
+}
+
+function GrowthRow({ s }: { s: AdminUsage }) {
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <Card>
+        <p className="mb-3 text-xs font-medium text-muted">Clicks per day · 30d</p>
+        <AreaChart data={s.series} />
+      </Card>
+      <Card>
+        <p className="mb-3 text-xs font-medium text-muted">Cumulative orgs · 90d</p>
+        <AreaChart data={s.cumulativeOrgs} />
+      </Card>
+    </div>
+  );
+}
+
+function TopListsRow({ s }: { s: AdminUsage }) {
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <Card>
+        <p className="mb-3 text-xs font-medium text-muted">Top organizations · 30d</p>
+        <BarList
+          items={s.topOrgs.map((o) => ({ key: o.id, clicks: o.clicks }))}
+          formatKey={(id) => {
+            const o = s.topOrgs.find((t) => t.id === id);
+            if (!o) return id;
+            return (
+              <span className="flex items-center gap-2">
+                {o.name} <Badge color={planColor(orgPlanOf(o.plan))}>{o.plan}</Badge>
+              </span>
+            );
+          }}
+        />
+      </Card>
+      <Card>
+        <p className="mb-3 text-xs font-medium text-muted">Top links · 30d</p>
+        <BarList
+          items={s.topLinks.map((l) => ({ key: l.id, clicks: l.clicks }))}
+          formatKey={(id) => {
+            const l = s.topLinks.find((t) => t.id === id);
+            return l ? `${linkLabel(l)} · ${l.orgName}` : id;
+          }}
+        />
+      </Card>
+    </div>
+  );
+}
+
+function TableSizeCard({ s }: { s: AdminUsage }) {
+  const projectedDate =
+    s.tableProjectedDays !== null && s.tableProjectedDays > 0
+      ? new Date(Date.now() + s.tableProjectedDays * 86400000)
+      : null;
+  return (
+    <Card>
+      <p className="mb-3 text-xs font-medium text-muted">
+        Table size · {formatNumber(s.tableSize)} rows
+      </p>
+      <AreaChart data={s.tableGrowth} />
+      {projectedDate && (
+        <p className="mt-3 text-xs text-muted">
+          ~{formatNumber(s.tableProjectedDays!)} days until 10 GB cap · estimated{" "}
+          {shortDate(projectedDate)}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function HealthRow({ s }: { s: AdminUsage }) {
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <Card>
+        <p className="mb-3 text-xs font-medium text-muted">Bot clicks per day · 30d</p>
+        <AreaChart data={s.botSeries} />
+      </Card>
+      <TableSizeCard s={s} />
+      {s.anomalies.length > 0 && (
+        <AdminTableCard title="Anomaly watchlist">
+          <thead>
+            <tr>
+              <Th>Organization</Th>
+              <Th>Clicks 24h</Th>
+              <Th>Daily avg 14d</Th>
+              <Th>Ratio</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {s.anomalies.map((a) => (
+              <tr key={a.orgId}>
+                <Td>{a.orgName}</Td>
+                <Td className="tnum">{formatNumber(a.clicks24h)}</Td>
+                <Td className="tnum">{a.avg14d}</Td>
+                <Td className="tnum font-bold text-danger">{a.ratio}x</Td>
+              </tr>
+            ))}
+          </tbody>
+        </AdminTableCard>
+      )}
+      {s.capPressure.length > 0 && (
+        <AdminTableCard title="Cap pressure">
+          <thead>
+            <tr>
+              <Th>Organization</Th>
+              <Th>Links</Th>
+              <Th>Members</Th>
+              <Th>Domains</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {s.capPressure.map((c) => (
+              <tr key={c.orgId}>
+                <Td>
+                  <span className="flex items-center gap-2">
+                    {c.orgName} <Badge color={planColor(c.plan)}>{c.plan}</Badge>
+                  </span>
+                </Td>
+                <Td className="tnum">
+                  <span className={c.linksPct >= 100 ? "text-danger font-bold" : ""}>
+                    {c.linksPct}%
+                  </span>
+                </Td>
+                <Td className="tnum">
+                  <span className={c.membersPct >= 100 ? "text-danger font-bold" : ""}>
+                    {c.membersPct}%
+                  </span>
+                </Td>
+                <Td className="tnum">
+                  <span className={c.domainsPct >= 100 ? "text-danger font-bold" : ""}>
+                    {c.domainsPct}%
+                  </span>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </AdminTableCard>
+      )}
+    </div>
+  );
+}
+
+export function AdminUsagePage() {
+  const usage = useAdminUsage();
+  if (usage.isLoading) return <AdminUsageSkeleton />;
+  if (!usage.data) return <p className="text-sm text-danger">Could not load usage.</p>;
+  const s = usage.data;
+
+  return (
+    <div>
+      <PageHeader title="Platform usage" sub="Everything, across all organizations" />
+      <BusinessStats s={s} />
+      <ResourceStats s={s} />
+      <BusinessRow s={s} />
+      <GrowthRow s={s} />
+      <TopListsRow s={s} />
+      <HealthRow s={s} />
+    </div>
+  );
+}

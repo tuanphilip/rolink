@@ -1,0 +1,189 @@
+import { describe, expect, test } from "bun:test";
+import { NOTICE_FOOTER, renderEmail } from "../src/worker/email-layout";
+
+const APP_URL = "https://rdyrct.example";
+const TO = "person@example.com";
+
+const base = {
+  preheader: "Join Acme on rdyrct.",
+  heading: "You're invited to join Acme",
+  paragraphs: ["rdyrct shortens links and makes QR codes for them."],
+};
+
+describe("renderEmail (#73)", () => {
+  test("returns both parts from one call", () => {
+    const { html, text } = renderEmail(base, APP_URL, TO);
+    expect(html.html).toContain("<!doctype html>");
+    expect(text).toContain("You're invited to join Acme");
+    expect(text).not.toContain("<");
+  });
+
+  test("puts the preheader before the body so inboxes preview it", () => {
+    const { html } = renderEmail(base, APP_URL, TO);
+    const preheaderAt = html.html.indexOf("Join Acme on rdyrct.");
+    const headingAt = html.html.indexOf("<h1");
+    expect(preheaderAt).toBeGreaterThan(-1);
+    expect(preheaderAt).toBeLessThan(headingAt);
+  });
+
+  test("pads the preheader with zero-width characters only, never a visible space", () => {
+    const { html } = renderEmail(base, APP_URL, TO);
+    const hidden = html.html.match(/width:0[^>]*>([^<]*)<\/div>/)?.[1] ?? "";
+    expect(hidden.startsWith(base.preheader)).toBe(true);
+    expect(hidden.slice(base.preheader.length)).toMatch(/^[͏‌]{100,}$/);
+  });
+
+  test("hides the preheader from the rendered message", () => {
+    // It belongs in the inbox preview line, not at the top of the email.
+    expect(renderEmail(base, APP_URL, TO).html.html).toContain("display:none");
+  });
+
+  test("escapes user-controlled content in both parts", () => {
+    const hostile = `Acme</strong><a href="https://phish.example">click</a>`;
+    const { html, text } = renderEmail(
+      {
+        ...base,
+        heading: `You're invited to join ${hostile}`,
+        paragraphs: [hostile],
+      },
+      APP_URL,
+      TO,
+    );
+
+    expect(html.html).not.toContain(`href="https://phish.example"`);
+    // Exactly one anchor: the layout's own, and only when there is a CTA.
+    expect(html.html.match(/<a\s/g) ?? []).toHaveLength(0);
+    // The text part is not markup, so it carries the name as typed.
+    expect(text).toContain(hostile);
+  });
+
+  test("renders a CTA as a link in HTML and a labelled URL in text", () => {
+    const { html, text } = renderEmail(
+      {
+        ...base,
+        cta: { label: "Accept the invite", url: "https://rdyrct.com/invite/abc" },
+      },
+      APP_URL,
+      TO,
+    );
+
+    expect(html.html).toContain(`href="https://rdyrct.com/invite/abc"`);
+    expect(text).toContain("Accept the invite: https://rdyrct.com/invite/abc");
+  });
+
+  test("refuses a CTA URL that is not http(s) in both parts", () => {
+    const { html, text } = renderEmail(
+      {
+        ...base,
+        cta: { label: "Go", url: "javascript:alert(1)" },
+      },
+      APP_URL,
+      TO,
+    );
+
+    expect(html.html).not.toContain("javascript:");
+    expect(text).not.toContain("javascript:");
+  });
+
+  test("puts a code on its own line in the text part", () => {
+    const { html, text } = renderEmail(
+      {
+        preheader: "123456 is your code.",
+        heading: "Your verification code",
+        paragraphs: ["Enter this code to finish signing in."],
+        code: "123456",
+        note: "The code expires in 10 minutes.",
+      },
+      APP_URL,
+      TO,
+    );
+
+    expect(html.html).toContain("123456");
+    // The e2e helper reads the code off a line of its own; keep it that way.
+    expect(text).toMatch(/^123456$/m);
+  });
+
+  test("carries a sender footer in both parts", () => {
+    const { html, text } = renderEmail(base, APP_URL, TO);
+    expect(html.html).toContain("rdyrct, link shortening and QR codes");
+    expect(text).toContain("rdyrct, link shortening and QR codes.");
+  });
+
+  test("leaves the footer out of both parts when asked, and nothing else", () => {
+    const { html, text } = renderEmail({ ...base, footer: false }, APP_URL, TO);
+    for (const part of [html.html, text]) {
+      expect(part).not.toContain("rdyrct, link shortening and QR codes");
+      expect(part).not.toContain("Not you?");
+      expect(part).not.toContain(`Sent to ${TO}`);
+    }
+    expect(text).toContain(base.heading);
+    expect(text.endsWith("\n")).toBe(false);
+  });
+
+  test("renders the hero layout in both parts, and leaves the plain layout alone", () => {
+    const hero = {
+      eyebrow: "Welcome to rdyrct",
+      sample: { long: "https://example.com/long", short: "rdyr.cc/hello" },
+    };
+    const { html, text } = renderEmail({ ...base, hero, footer: false }, APP_URL, TO);
+    expect(html.html).toContain("Welcome to rdyrct");
+    // Gmail linkifies a bare host; a zero-width space after each dot stops it.
+    expect(html.html).toContain("rdyr.​cc/hello");
+    expect(html.html).not.toContain("rdyr.cc/hello");
+    expect(html.html).toContain('class="band"');
+    expect(text).toContain("WELCOME TO RDYRCT");
+    expect(text).toContain("https://example.com/long -> rdyr.cc/hello");
+    // Both layouts open with the same brand band.
+    expect(renderEmail(base, APP_URL, TO).html.html).toContain('class="band"');
+
+    const bare = renderEmail(
+      { ...base, hero: { sample: hero.sample }, footer: false },
+      APP_URL,
+      TO,
+    );
+    expect(bare.html.html).not.toContain("text-transform:uppercase");
+    expect(bare.text.startsWith(base.heading)).toBe(true);
+  });
+
+  test("puts the brand image first in every layout, with the word as its alt text", () => {
+    const { html } = renderEmail(base, APP_URL, TO);
+    expect(html.html).toContain(`src="${APP_URL}/email-logo.png"`);
+    expect(html.html).toContain('alt="rdyrct"');
+  });
+
+  test("swaps the footer advice for mail about the reader's own account", () => {
+    const { html, text } = renderEmail({ ...base, footerLine: NOTICE_FOOTER }, APP_URL, TO);
+    for (const part of [html.html, text]) {
+      expect(part).toContain(NOTICE_FOOTER);
+      expect(part).not.toContain("Not you?");
+      expect(part).toContain(`Sent to ${TO}`);
+    }
+  });
+
+  test("states the recipient as a plain fact, not a guessed reason", () => {
+    const { html, text } = renderEmail(base, APP_URL, TO);
+    expect(html.html).toContain(`Sent to ${TO}.`);
+    expect(text).toContain(`Sent to ${TO}.`);
+  });
+
+  test("says where to go when the mail was not expected, in both parts", () => {
+    const { html, text } = renderEmail(base, APP_URL, TO);
+    expect(html.html).toContain("Not you? Ignore it, or write to support@mail.rdyrct.com.");
+    expect(text).toContain("Not you? Ignore it, or write to support@mail.rdyrct.com.");
+  });
+
+  test("keeps a dark-mode block but styles light without it", () => {
+    const { html } = renderEmail(base, APP_URL, TO);
+    expect(html.html).toContain("prefers-color-scheme: dark");
+    // The light values are inline, so a client that drops <style> still reads.
+    expect(html.html).toContain("background:#f7f4ef");
+  });
+
+  test("omits the code, CTA, and note blocks when unused", () => {
+    const { html } = renderEmail(base, APP_URL, TO);
+    expect(html.html).not.toContain("letter-spacing:6px");
+    expect(html.html).not.toContain("<a ");
+    expect(html.html).not.toContain("undefined");
+    expect(html.html).not.toContain("null");
+  });
+});

@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RoLink: Cloudflare Edge Shortener & QR Studio by Tuan Philip</title>
+    <meta
+      name="description"
+      content="URL shortener and QR code generator for teams: branded short links on your own domain, custom QR codes, and privacy-friendly click analytics."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- rdyrct.com only -->
+    <!-- From here to the closing marker belongs to rdyrct.com alone. A
+         self-hosted build drops it: see scripts/site-head.ts. -->
+    <link rel="canonical" href="https://rdyrct.com" />
+    <meta property="og:title" content="rdyrct - URL shortener and QR code generator" />
+    <meta
+      property="og:description"
+      content="URL shortener and QR code generator for teams: branded short links on your own domain, custom QR codes, and privacy-friendly click analytics."
+    />
+    <meta property="og:image" content="https://rdyrct.com/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://rdyrct.com" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="rdyrct" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- X reads og:image for most cards, but not reliably when twitter:card is
+         set explicitly, and it never falls back for the alt text. Same file as
+         og:image: one card, one 1200x630 image, no second thing to regenerate
+         when scripts/og-image.html changes. -->
+    <meta name="twitter:image" content="https://rdyrct.com/og.png" />
+    <meta
+      name="twitter:image:alt"
+      content="rdyrct, a URL shortener and QR code generator for teams"
+    />
+    <meta name="twitter:title" content="rdyrct - URL shortener and QR code generator" />
+    <meta
+      name="twitter:description"
+      content="URL shortener and QR code generator for teams: branded short links on your own domain, custom QR codes, and privacy-friendly click analytics."
+    />
+    <!-- The SoftwareApplication offer below mirrors PLAN_PRICES in
+         src/shared/types.ts; Polar sets what is actually charged. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://rdyrct.com/#organization",
+            "name": "rdyrct",
+            "url": "https://rdyrct.com",
+            "logo": "https://rdyrct.com/favicon.svg",
+            "sameAs": ["https://github.com/baronunread/rdyrct"],
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "contactType": "customer support",
+              "email": "support@mail.rdyrct.com"
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://rdyrct.com/#website",
+            "name": "rdyrct",
+            "url": "https://rdyrct.com",
+            "description": "URL shortener and QR code generator for teams: branded short links on your own domain, custom QR codes, and privacy-friendly click analytics.",
+            "publisher": { "@id": "https://rdyrct.com/#organization" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "rdyrct",
+            "url": "https://rdyrct.com",
+            "description": "URL shortener and QR code generator for teams: branded short links on your own domain, custom QR codes, and privacy-friendly click analytics.",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Any web browser",
+            "offers": {
+              "@type": "AggregateOffer",
+              "lowPrice": "0",
+              "highPrice": "9",
+              "priceCurrency": "USD",
+              "offerCount": "3"
+            }
+          }
+        ]
+      }
+    </script>
+    <!-- /rdyrct.com only -->
+    <!--
+      Theme before paint, so inline and blocking: a file costs a round trip
+      and defer would defeat the point. A stored choice wins, otherwise the
+      OS, otherwise light.
+
+      script-src has no 'unsafe-inline'; this runs by its sha256, named in
+      src/worker/security-headers.ts. Edit a byte, whitespace included, and
+      the browser refuses it in production only. tests/theme-init.test.ts
+      recomputes the hash and fails when the two have drifted.
+    -->
+    <script>
+      (function () {
+        const os = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = os;
+        try {
+          const stored = localStorage.getItem("theme");
+          if (stored === "light" || stored === "dark")
+            document.documentElement.dataset.theme = stored;
+        } catch {}
+        // Resolve browser hints before paint. The keys of two ended hero copy
+        // tests are dropped.
+        try {
+          const user = JSON.parse(localStorage.getItem("rdyrct:user:v1") || "null");
+          if (user?.user?.id && Array.isArray(user.orgs))
+            document.documentElement.dataset.auth = "in";
+          localStorage.removeItem("rdyrct:hero-variant:v1");
+          localStorage.removeItem("rdyrct:hero-variant:v2");
+        } catch {}
+      })();
+    </script>
+    <!-- rdyrct.com only -->
+    <script
+      defer
+      data-domain="rdyrct.com"
+      src="https://stats.brnr.dev/js/4c6e73d608dd3a5e7b28ec7a6fd6a53a.js"
+    ></script>
+    <!-- /rdyrct.com only -->
+  </head>
+  <body>
+    <div id="root">
+      <!-- rdyrct.com only -->
+      <!--
+        What anything reading the HTML gets instead of running the app:
+        crawlers, link previews, answer engines. React replaces this div on
+        mount, so it must stay true of the app that replaces it (see
+        src/app/routes/landing.tsx and public/llms.txt). Clipped rather than
+        display:none, so screen readers still reach it.
+      -->
+      <div
+        style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)"
+      >
+        <a href="#main">Skip to content</a>
+        <main id="main">
+          <h1>Know which channel earned the click.</h1>
+          <p>
+            rdyrct is an organization-based URL shortener and QR code generator that runs entirely
+            on Cloudflare. Create branded short links on your own domain, generate custom QR codes,
+            and see click analytics without giving up your team's privacy.
+          </p>
+
+          <h2>Branded short links</h2>
+          <p>
+            Point a custom domain at rdyrct and every short link carries your brand instead of a
+            generic host. Choose your own slugs on a custom domain; on the shared rdyr.cc domain,
+            slugs are always random so nobody can squat a name that isn't theirs. Hobby includes 1
+            custom domain and Pro includes 5, each with automatic TLS.
+          </p>
+
+          <h2>QR codes with your logo</h2>
+          <p>
+            Generate a QR code for any link, styled with your own colors, dot shapes, and a logo in
+            the middle. Download it as a PNG or SVG. Plain QR codes are free; a logo comes with a
+            paid plan from $4/mo, up to 256 KB and 512 px on a side.
+          </p>
+
+          <h2>Privacy-friendly click analytics</h2>
+          <p>Every click records 4 things and nothing else:</p>
+          <ul>
+            <li>country</li>
+            <li>referrer</li>
+            <li>device</li>
+            <li>time</li>
+          </ul>
+          <p>
+            rdyrct never stores an IP address or a precise location, so you get the analytics that
+            matter without tracking the people who click. History runs 7 days on Free, 30 days on
+            Hobby, and 365 days on Pro.
+          </p>
+
+          <h2>Campaign tracking with UTM tags</h2>
+          <p>
+            Tag a link with the built-in UTM builder, or paste a URL that already carries UTM
+            parameters and rdyrct reads them back out rather than making you retype them. Campaigns,
+            sources, and mediums are then ranked by clicks, so the question "which channel earned
+            this" has an answer instead of an argument. The analytics page compares any period with
+            the one before it, shows an activity heatmap of your busiest hours, and flags links that
+            have gone quiet: no clicks in 30 days, or a drop of more than half week over week.
+          </p>
+
+          <h2>Built for teams</h2>
+          <p>
+            An organization holds the links, the domains, and the people. Owner, admin, and member
+            roles decide who can edit links, connect a domain, and invite others; invites go out by
+            email, are single-use, and expire after 7 days. Only the organization's owner needs a
+            paid plan, and one subscription covers every organization that owner runs, so a team
+            does not pay per seat to read its own numbers. An organization holds up to 3 members on
+            Free, 5 on Hobby, and 25 on Pro.
+          </p>
+
+          <h2>Links that do not break</h2>
+          <p>
+            Rename a slug and the old one keeps redirecting for 48 hours, so a link already printed
+            on a flyer or sent to a list does not die the moment somebody tidies up. Extra aliases
+            can point at the same link on purpose. Shorten a URL you have already shortened and
+            rdyrct offers to add it as an alias on the existing link instead of quietly creating a
+            second one, which keeps that link's statistics in one place. Downgrade and nothing is
+            deleted: links on rdyr.cc and rdyrct.com keep working on every plan, and links on your
+            own domain pause after 30 days, with two emails first, until you upgrade again.
+          </p>
+
+          <h2>Try it without an account</h2>
+          <p>
+            The homepage shortener works with no sign-up and no email: paste a URL, get a short link
+            and a QR code back. Those links last 24 hours and show how many times they have been
+            clicked; signing up keeps them and shows where the clicks came from. The QR code
+            generator is a page of its own and asks for nothing at all, because the code is built in
+            your browser rather than on a server.
+          </p>
+
+          <h2>Plans</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Plan</th>
+                <th>Price</th>
+                <th>Organizations</th>
+                <th>Links</th>
+                <th>Custom domains</th>
+                <th>Team members</th>
+                <th>Analytics</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Free</td>
+                <td>$0</td>
+                <td>1</td>
+                <td>30</td>
+                <td>0</td>
+                <td>3</td>
+                <td>7 days</td>
+              </tr>
+              <tr>
+                <td>Hobby</td>
+                <td>$4/mo</td>
+                <td>1</td>
+                <td>500</td>
+                <td>1</td>
+                <td>5</td>
+                <td>30 days</td>
+              </tr>
+              <tr>
+                <td>Pro</td>
+                <td>$9/mo</td>
+                <td>3</td>
+                <td>3,000</td>
+                <td>5</td>
+                <td>25</td>
+                <td>365 days</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            Hobby and Pro add QR codes with your logo. rdyrct is also open source and can be
+            self-hosted on your own Cloudflare account for free.
+          </p>
+
+          <h2>Frequently asked questions</h2>
+          <h3>Does rdyrct track IP addresses?</h3>
+          <p>No. Click analytics store only country, referrer, device, and timestamp.</p>
+          <h3>Can I use my own domain?</h3>
+          <p>
+            Yes, on the Hobby and Pro plans: 1 custom domain on Hobby, 5 on Pro. Custom domains let
+            you choose your own slugs.
+          </p>
+          <h3>Can I self-host rdyrct?</h3>
+          <p>
+            Yes. rdyrct is open source and runs entirely on Cloudflare Workers, D1, and KV; see
+            <a href="https://github.com/baronunread/rdyrct">the GitHub repository</a> for deploy
+            instructions. There is no enterprise edition held back: deploy it to your own Cloudflare
+            account and you are the platform admin, which means you set your own limits.
+          </p>
+          <h3>Why are slugs random on the free plan?</h3>
+          <p>
+            Short links on the shared rdyr.cc domain always get a random slug, on every plan. One
+            shared namespace means chosen names would be a land grab, so nobody gets to squat one.
+            Picking your own slug comes with a custom domain, where the namespace is yours.
+          </p>
+          <h3>Is the free plan a trial?</h3>
+          <p>
+            No. It is 30 links, 3 teammates, QR codes, and 7 days of click analytics, with no card
+            and no clock running. Paid plans add branded links on your own domain, chosen slugs, QR
+            codes carrying your logo, and a longer analytics history.
+          </p>
+          <h3>Does rdyrct have an API?</h3>
+          <p>
+            Yes. A REST API that answers to an organization-scoped API key, and a hosted MCP server
+            for AI agents, both free on every plan. The <a href="/docs">developer docs</a> list the
+            endpoints and every MCP tool.
+          </p>
+        </main>
+        <!-- The questions above, as FAQPage. Down here rather than in the head
+             graph because this whole div is the landing page's: React replaces
+             it on mount, and the landing page then renders its own FaqJsonLd.
+             tests/jsonld.test.ts checks every pair matches the text above. -->
+        <script type="application/ld+json" id="faq">
+          {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Does rdyrct track IP addresses?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Click analytics store only country, referrer, device, and timestamp."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I use my own domain?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes, on the Hobby and Pro plans: 1 custom domain on Hobby, 5 on Pro. Custom domains let you choose your own slugs."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I self-host rdyrct?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. rdyrct is open source and runs entirely on Cloudflare Workers, D1, and KV; see the GitHub repository for deploy instructions. There is no enterprise edition held back: deploy it to your own Cloudflare account and you are the platform admin, which means you set your own limits."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Why are slugs random on the free plan?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Short links on the shared rdyr.cc domain always get a random slug, on every plan. One shared namespace means chosen names would be a land grab, so nobody gets to squat one. Picking your own slug comes with a custom domain, where the namespace is yours."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is the free plan a trial?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. It is 30 links, 3 teammates, QR codes, and 7 days of click analytics, with no card and no clock running. Paid plans add branded links on your own domain, chosen slugs, QR codes carrying your logo, and a longer analytics history."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does rdyrct have an API?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. A REST API that answers to an organization-scoped API key, and a hosted MCP server for AI agents, both free on every plan. The developer docs list the endpoints and every MCP tool."
+                }
+              }
+            ]
+          }
+        </script>
+
+        <nav aria-label="Footer">
+          <a href="/pricing">Pricing</a>
+          <a href="/docs">API and MCP docs</a>
+          <a href="/qr-code-generator">QR code generator</a>
+          <a href="/utm-builder">UTM builder</a>
+          <a href="/branded-link-shortener">Branded link shortener</a>
+          <a href="/roadmap">Roadmap</a>
+          <a href="/privacy">Privacy policy and cookie policy</a>
+          <a href="/terms">Terms of service</a>
+          <a href="/signup">Sign up</a>
+          <a href="mailto:support@mail.rdyrct.com">Support</a>
+        </nav>
+      </div>
+      <!-- /rdyrct.com only -->
+    </div>
+    <script type="module" src="/src/app/main.tsx"></script>
+  </body>
+</html>

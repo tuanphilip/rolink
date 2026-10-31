@@ -1,0 +1,120 @@
+import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { installBrowserGlobals } from "./browser-globals";
+import { api, ApiError, shortUrl } from "../src/app/lib/api";
+import type { JsonValue } from "../src/shared/types";
+
+// Set only once tests start running, not at module load: other test files'
+// modules (loaded up front, before any test runs) must see a real absence of
+// `window`, not this shim.
+beforeAll(() => {
+  installBrowserGlobals({
+    window: { location: { origin: "http://localhost:5173", host: "localhost:5173" } },
+  });
+});
+
+const realFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
+
+function stubFetch(res: {
+  ok: boolean;
+  status?: number;
+  statusText?: string;
+  json?: () => Promise<JsonValue>;
+  /** A body that is not JSON, for the branch where res.json() rejects. */
+  text?: string;
+}) {
+  const calls: { url: string; init?: RequestInit }[] = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    const init2 = {
+      status: res.status ?? (res.ok ? 200 : 500),
+      statusText: res.statusText ?? "OK",
+    };
+    if (res.text !== undefined) return new Response(res.text, init2);
+    return Response.json(res.json ? await res.json() : {}, init2);
+  };
+  return calls;
+}
+
+describe("ApiError", () => {
+  test("carries status, message and code", () => {
+    const err = new ApiError(409, "Slug taken", "slug_taken");
+    expect(err).toBeInstanceOf(Error);
+    expect(err.status).toBe(409);
+    expect(err.message).toBe("Slug taken");
+    expect(err.code).toBe("slug_taken");
+  });
+});
+
+describe("shortUrl", () => {
+  test("uses the custom domain when given one", () => {
+    expect(shortUrl("abc123", "go.brand.com")).toBe("https://go.brand.com/abc123");
+  });
+
+  test("falls back to the current origin", () => {
+    expect(shortUrl("abc123")).toBe("http://localhost:5173/abc123");
+    expect(shortUrl("abc123", null)).toBe("http://localhost:5173/abc123");
+  });
+
+  test("uses the shared link host when given one", () => {
+    expect(shortUrl("abc123", null, "rdyr.cc")).toBe("https://rdyr.cc/abc123");
+  });
+
+  // No SHARED_LINK_HOST: the link host is the app's own, and the worker
+  // builds those links from APP_URL, scheme included. A forced https here
+  // previewed a QR code for an address that does not exist on plain http.
+  test("keeps the page's scheme when the link host is the app's own", () => {
+    expect(shortUrl("abc123", null, "localhost:5173")).toBe("http://localhost:5173/abc123");
+  });
+});
+
+describe("api", () => {
+  test("prefixes /api and parses the JSON body", async () => {
+    const calls = stubFetch({
+      ok: true,
+      json: async () => ({ hello: "world" }),
+    });
+    const data = await api<{ hello: string }>("/user");
+    expect(calls[0].url).toBe("/api/user");
+    expect(data.hello).toBe("world");
+  });
+
+  test("serializes a body and sets the JSON content type", async () => {
+    const calls = stubFetch({ ok: true });
+    await api("/links", { method: "POST", body: { slug: "abc" } });
+    const call = calls[0]!;
+    expect(call.init?.body).toBe(JSON.stringify({ slug: "abc" }));
+    expect(call.init?.headers).toMatchObject({
+      "content-type": "application/json",
+    });
+  });
+
+  test("throws ApiError with the server's message and code", async () => {
+    stubFetch({
+      ok: false,
+      status: 409,
+      statusText: "Conflict",
+      json: async () => ({ message: "Slug taken", code: "slug_taken" }),
+    });
+    const err = await api("/links", { method: "POST" }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(409);
+    expect(err.message).toBe("Slug taken");
+    expect(err.code).toBe("slug_taken");
+  });
+
+  test("falls back to statusText for non-JSON error bodies", async () => {
+    stubFetch({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      text: "not json",
+    });
+    const err = await api("/boom").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(500);
+    expect(err.message).toBe("Internal Server Error");
+  });
+});

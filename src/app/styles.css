@@ -1,0 +1,720 @@
+@import "tailwindcss";
+@import "shadow-plugin";
+
+/* Same files as @fontsource, declared here for one reason: font-display.
+   Fontsource hardcodes swap, which paints the fallback face and then jumps to
+   Figtree when it arrives. The faces above the fold are preloaded, so
+   optional uses them from the first paint and never swaps; a face that is
+   late is skipped for this view and cached for the next. */
+@font-face {
+  font-family: "Figtree Variable";
+  font-display: optional;
+  font-weight: 300 900;
+  src: url("../../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Figtree Variable";
+  font-display: optional;
+  font-weight: 300 900;
+  src: url("../../node_modules/@fontsource-variable/figtree/files/figtree-latin-ext-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-display: optional;
+  font-weight: 400;
+  src: url("../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2")
+    format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-display: optional;
+  font-weight: 700;
+  src: url("../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-700-normal.woff2")
+    format("woff2");
+}
+
+/* ---------------------------------------------------------------- */
+/* Theme tokens: paper / dark pastel pair                            */
+/*                                                                   */
+/* Light is the base, dark is the override, so a page that renders    */
+/* before the inline theme bootstrap runs (or without it) is light.   */
+/* ---------------------------------------------------------------- */
+
+:root {
+  --bg: #f7f4ef;
+  --surface: #ffffff;
+  --surface-2: #efeae2;
+  --border: #ddd5c8;
+  --text: #2a2733;
+  /* Secondary text, so it is held to APCA 75 (body threshold) on the worst
+     ground it ever sits on, --surface-2. The old #6e6880 measured APCA 64
+     there and WCAG 4.43, under AA. Now 75-87 / 6.57-7.87. */
+  --muted: #544f61;
+  /* Placeholders, held at 3:1 on --bg (the input's own ground): visible, but
+     clearly not filled in. They used to ride on --muted, which was raised to
+     body-text legibility, so a hint sat at 7.17:1 and read as real text. */
+  --placeholder: #8d8993;
+
+  --pink: #c2607f;
+  --mint: #35875e;
+  /* Link and label colour, held to WCAG AA 4.5 on all three grounds. The old
+     #7a5fc2 was 4.13 on --surface-2. Darkened just enough, hue kept. */
+  --lavender: #745ab8;
+  --butter: #a8842c;
+  --sky: #4f7fae;
+
+  --accent: var(--lavender);
+  --accent-2: var(--mint);
+  --chart: #7a5fc2;
+  --danger: #c2607f;
+
+  /* sugar-high's token colours (docs.tsx code blocks), aliased onto the
+     tokens above instead of a separate palette: var() resolves against
+     whichever theme is active where it is used, so this one block covers
+     both without repeating itself in [data-theme="dark"]. Restrained on
+     purpose, same two colours the rest of the app highlights with. */
+  --sh-keyword: var(--accent);
+  --sh-class: var(--accent);
+  --sh-string: var(--accent-2);
+  --sh-jsxliterals: var(--accent-2);
+  --sh-property: var(--text);
+  --sh-identifier: var(--text);
+  --sh-entity: var(--butter);
+  --sh-sign: var(--muted);
+  --sh-comment: var(--muted);
+
+  /* The landing's lit surfaces (rdyrct-design, "Light on the marketing
+     pages"): a hairline of light along a panel's top edge and a long soft
+     shadow under it, warm on cream. */
+  --lit-top: rgb(255 255 255 / 0.9);
+  --lit-drop: rgb(80 50 30 / 0.32);
+
+  /* The edge on a picture (image-outline): ink at 8%, so a photo with a
+     pale or a dark border still ends where its frame does. */
+  --image-outline: rgb(0 0 0 / 0.08);
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #17151f;
+  --surface: #1f1c2b;
+  --surface-2: #262336;
+  --border: #34304a;
+  --text: #eae7f2;
+  /* Light-on-dark scores far worse under APCA than WCAG suggests: the old
+     #9d95b3 read as a comfortable 6.35 WCAG but only APCA 44, which is why
+     dark mode felt as hard to read as light. Raised to APCA 68-70, still a
+     clear step below --text. */
+  --muted: #c6c2d3;
+  /* 3.52:1 on --bg. Light-on-dark needs a touch more than the light theme's
+     3.12 to read as present at all at 14px. */
+  --placeholder: #6f6c79;
+
+  --pink: #f5b8c8;
+  --mint: #b9e6c9;
+  --lavender: #cdb9f5;
+  --butter: #f2e3b3;
+  --sky: #b9d9f0;
+
+  /* chart mark color: deeper than the UI accent so it passes the
+     lightness/chroma band on dark surfaces (validated) */
+  --chart: #9d7fe8;
+  --danger: #f5b8c8;
+
+  color-scheme: dark;
+
+  /* shadow-plugin's default dark-mode ring is a flat white hairline; tint it
+     with our own --border instead so elevated surfaces pick up the app's
+     palette rather than a generic gray edge. Lift the hue toward white first
+     (still opaque), then mix *that* toward transparent — mixing --border
+     straight toward transparent stays too dark to read at UI scale, and
+     mixing it straight toward white (skipping the transparent step) produces
+     a fully opaque line that's too bright over light backdrops. */
+  --smooth-ring-color: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--border), white 22%) 30%,
+    transparent
+  );
+
+  --lit-top: rgb(255 255 255 / 0.07);
+  --lit-drop: rgb(0 0 0 / 0.7);
+
+  --image-outline: rgb(255 255 255 / 0.08);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-placeholder: var(--placeholder);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-pink: var(--pink);
+  --color-mint: var(--mint);
+  --color-lavender: var(--lavender);
+  --color-butter: var(--butter);
+  --color-sky: var(--sky);
+  --color-chart: var(--chart);
+  --color-danger: var(--danger);
+  /* stylelint-disable value-keyword-case -- Preserve canonical font-family casing. */
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* stylelint-enable value-keyword-case */
+  --text-2xs: 11px;
+  --text-3xs: 10px;
+  --text-4xs: 9px;
+  --animate-shake: shake 300ms ease;
+  /* one letter per step: only even in a monospace font */
+  --animate-type-6: type 540ms steps(6) both;
+  /* above dialogs (z-50): toasts must stay visible over an open modal */
+  --z-index-toast: 60;
+}
+
+/* The one dark band on a marketing page. It redefines the tokens for
+   everything inside it, so the components in it are the ordinary ones: the
+   dark theme's palette on cream, and a step darker than the page on dark. */
+@utility ink-band {
+  --bg: #17151f;
+  --surface: #1f1c2b;
+  --surface-2: #262336;
+  --border: #34304a;
+  --text: #eae7f2;
+  --muted: #c6c2d3;
+  --accent: #cdb9f5;
+  --lavender: #cdb9f5;
+  --lit-top: rgb(255 255 255 / 0.07);
+  --lit-drop: rgb(0 0 0 / 0.7);
+  background:
+    radial-gradient(
+      45% 160px at 50% 0,
+      color-mix(in oklab, var(--accent) 22%, transparent),
+      transparent
+    ),
+    var(--bg);
+  color: var(--text);
+  color-scheme: dark;
+}
+[data-theme="dark"] .ink-band {
+  --bg: #0e0c14;
+  --surface: #1a1726;
+}
+
+/* The column every public page sits in, the stand-in shown while a page
+   loads included (main.tsx), so the header does not jump when it arrives.
+   Wide, as the best pages in this category are: the frame, the bands and
+   the footer all run to it, and text inside keeps its own measure. */
+@utility page-column {
+  position: relative;
+  margin-inline: auto;
+  min-height: 100dvh;
+  max-width: 84rem;
+  padding-inline: 1.5rem;
+}
+
+/* A product panel on the landing, lit from above. */
+@utility lit {
+  box-shadow:
+    inset 0 1px 0 var(--lit-top),
+    0 30px 60px -30px var(--lit-drop);
+}
+
+/* The soft field of brand colour behind a landing panel: the accent, the
+   mint and the butter, blurred into one light. Decoration, so aria-hidden
+   wherever it is used, and it follows the theme through the tokens. */
+@utility landing-mesh {
+  background:
+    radial-gradient(
+      40% 50% at 30% 40%,
+      color-mix(in oklab, var(--accent) 45%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      35% 45% at 70% 60%,
+      color-mix(in oklab, var(--butter) 40%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      35% 40% at 55% 25%,
+      color-mix(in oklab, var(--mint) 35%, transparent),
+      transparent 70%
+    );
+  filter: blur(34px);
+}
+
+/* Large display type that catches the light: full ink at the top, fading
+   to the muted colour at the baseline. */
+@utility text-metal {
+  background: linear-gradient(
+    180deg,
+    var(--text) 30%,
+    color-mix(in oklab, var(--muted) 70%, transparent)
+  );
+  background-clip: text;
+  color: transparent;
+}
+
+/* A hairline inside a picture's own edge, drawn as an outline so it takes
+   no room and follows the corner radius. */
+@utility image-outline {
+  outline: 1px solid var(--image-outline);
+  outline-offset: -1px;
+}
+
+@utility grid-cols-shortener {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+@utility grid-cols-marketing-copy {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+@keyframes type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-5px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+.theme-sun {
+  display: none;
+}
+:root[data-theme="dark"] .theme-sun {
+  display: block;
+}
+:root[data-theme="dark"] .theme-moon {
+  display: none;
+}
+.theme-switch button {
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-radius: 9999px;
+  padding: 0.375rem;
+  color: var(--muted);
+}
+@media (hover: hover) {
+  .theme-switch button:hover {
+    color: var(--text);
+  }
+}
+:root:not([data-theme="dark"]) .theme-switch [data-mode="light"],
+:root[data-theme="dark"] .theme-switch [data-mode="dark"] {
+  background: var(--surface-2);
+  color: var(--text);
+}
+[data-auth-control="in"] {
+  display: none;
+}
+:root[data-auth="in"] [data-marketing-header]:not([data-auth]) [data-auth-control="in"],
+[data-marketing-header][data-auth="in"] [data-auth-control="in"] {
+  display: block;
+}
+:root[data-auth="in"] [data-marketing-header]:not([data-auth]) [data-auth-control="out"],
+[data-marketing-header][data-auth="in"] [data-auth-control="out"] {
+  display: none;
+}
+/* Keep the hero's space while a cached customer waits for browser hydration. */
+:root[data-auth="in"] [data-hero][data-ssr] [data-hero-personalization] {
+  visibility: hidden;
+}
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  /* Figtree carries everything anybody reads. Monospace is reserved for
+     identifiers, the strings a person copies or types, and is asked for
+     explicitly by the components that hold them (Slug, key fields, code).
+     See the rdyrct-design skill. */
+  font-family: var(--font-sans);
+  /* Inherited by the mono descendants too, which is the point: JetBrains
+     Mono ships programming ligatures on by default (calt), which
+     can combine "//" into a single glyph — Windows' DirectWrite and macOS's
+     CoreText apply calt differently for the same self-hosted webfont, so
+     the same URL can visually show one slash on one platform and what
+     looks like a missing slash on the other, even though the typed value
+     is correct — a Windows-only "the / disappears" report turned out to be
+     exactly this, not data loss. A form this URL/slug heavy can't afford
+     any character rendering ambiguously, so ligatures are off everywhere,
+     not just in inputs. */
+  font-variant-ligatures: none;
+  /* font-variant-ligatures: none covers liga/clig, but programming
+     ligatures are typically routed through the separate calt (contextual
+     alternates) OpenType feature, which needs its own explicit override. */
+  font-feature-settings: "calt" 0;
+  /* Light text on the dark theme reads heavier than the same weight on
+     cream under subpixel smoothing; grayscale keeps the two themes alike. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Underlines sit where the font says they go and break around
+     descenders, so a linked slug's "g" or "y" stays legible. Both inherit. */
+  text-underline-position: from-font;
+  text-decoration-skip-ink: auto;
+  /* reserve the scrollbar's width even on pages short enough to not need
+     one, so a page that grows past the fold doesn't shift content left */
+  scrollbar-gutter: stable;
+}
+
+/* Marketing-to-marketing navigation (the viewTransition Links in
+   landing-header.tsx and friends) cross-fades through a view transition, not
+   a CSS transition: a view transition fades two snapshots on the
+   compositor, so the cost doesn't scale with how many elements the page
+   has, unlike a `html *` transition rule would. A dark<->light toggle
+   (lib/theme.ts) does NOT use this — see the comment there for why a plain
+   swap turned out to be the correct behavior, not a fallback for it. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.18s;
+  animation-timing-function: ease;
+  /* The UA default is `plus-lighter`, which additively blends the old and
+     new snapshots instead of cross-fading them. `normal` blends by opacity
+     alone, which is what "cross-fade" actually means here. */
+  mix-blend-mode: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+/* The header carries its own transition group so it stays out of the root
+   crossfade above: old and new headers are pixel-identical for the same
+   auth state, and isolating the group is what keeps it from visibly
+   flickering along with the content, which is what makes the navigation
+   read as one page rather than a swap. It never needs to animate, on or off
+   reduced motion.
+
+   It names the pill, not the <header>: named, the header became the
+   backdrop the pill's blur samples, and page text scrolled under the
+   header showed through the pill at full strength. */
+::view-transition-old(marketing-header),
+::view-transition-new(marketing-header) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+[data-marketing-pill] {
+  view-transition-name: marketing-header;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* In the base layer so a utility on the element still wins. Headings
+   balance their lines rather than leaving one word on the last. Anything a
+   link can jump to stops clear of the marketing header's floating pill
+   instead of under it. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+  [id] {
+    scroll-margin-top: 5.5rem;
+  }
+}
+
+/* Set for the one frame a theme swap takes (lib/theme.ts): every colour
+   changes at once instead of each control easing on its own clock, which
+   reads as the page smearing from one theme into the other. */
+[data-theme-switching],
+[data-theme-switching] *,
+[data-theme-switching] *::before,
+[data-theme-switching] *::after {
+  transition: none !important;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* number-heavy UI: keep digits aligned */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Toasts share one grid cell (true overlap, not just visual stacking) so a
+   collapsed toast can sit exactly behind the one in front of it. Collapsed
+   position/scale/opacity are index-based (a fixed per-slot look, matching
+   the old design); Base UI's --toast-index/--toast-offset-y/data-* come
+   from its own Toast.Root, Toast.Viewport, and the toast's transitionStatus. */
+.toast-stack {
+  left: 50%;
+  display: grid;
+  width: min(22rem, calc(100vw - 2rem));
+  min-height: 2.75rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.rdyrct-toast {
+  grid-area: 1 / 1;
+  justify-self: end;
+  width: 100%;
+  z-index: calc(100 - var(--toast-index, 0));
+  pointer-events: auto;
+  opacity: calc(1 - var(--toast-index, 0) * 0.025);
+  transform: translateY(calc(var(--toast-index, 0) * -0.65rem))
+    scale(calc(1 - var(--toast-index, 0) * 0.06));
+  transform-origin: bottom center;
+  transition:
+    transform 250ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 200ms ease;
+}
+
+.rdyrct-toast[data-starting-style] {
+  opacity: 0;
+  transform: translateY(calc(var(--toast-index, 0) * -0.65rem + 1.5rem))
+    scale(calc(1 - var(--toast-index, 0) * 0.06));
+}
+
+/* Hovering or focusing the stack spaces every toast out to its real,
+   measured position (--toast-offset-y, in px) so each becomes fully
+   readable and individually closable, instead of just the frontmost one. */
+.rdyrct-toast[data-expanded] {
+  opacity: 1;
+  transform: translateY(calc(var(--toast-offset-y, 0px) * -1)) scale(1);
+  /* Read by .rdyrct-toast-timer circle below: an inherited custom property
+     keeps that rule a plain descendant selector instead of repeating this
+     one's [data-expanded] condition. */
+  --toast-timer-play-state: paused;
+}
+
+/* Last, so a toast being dismissed always collapses and fades regardless of
+   the expanded/collapsed state above. */
+.rdyrct-toast[data-ending-style] {
+  opacity: 0;
+  transform: translateY(calc(var(--toast-index, 0) * -0.65rem + 0.75rem))
+    scale(calc(1 - var(--toast-index, 0) * 0.06));
+  transition-duration: 250ms;
+}
+
+.rdyrct-toast[data-limited] {
+  display: none;
+}
+
+.rdyrct-toast-close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  /* Every toast gets a close button, but only the frontmost one is reachable
+     while the stack is collapsed: the rest sit visually behind it and only
+     become individually closable once the stack is expanded (hover/focus). */
+  pointer-events: none;
+  transition:
+    color 150ms ease,
+    scale 150ms ease;
+}
+
+.rdyrct-toast-close-front,
+.rdyrct-toast[data-expanded] .rdyrct-toast-close {
+  pointer-events: auto;
+}
+
+/* The ring is 20px; the press target reaches 32 without moving it. */
+.rdyrct-toast-close::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+.rdyrct-toast-close:focus-visible {
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .rdyrct-toast-close:hover {
+    color: var(--text);
+  }
+}
+
+.rdyrct-toast-close:active {
+  scale: 0.96;
+}
+
+.rdyrct-toast-timer {
+  position: absolute;
+  inset: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.5;
+  transform: rotate(-90deg);
+}
+
+/* Expanding the stack pauses each toast's auto-dismiss timer (Base UI);
+   --toast-timer-play-state (set above, on the expanded toast) freezes the
+   ring in step so it doesn't finish before the toast actually would, which'd
+   read as the toast lying about its remaining time. */
+.rdyrct-toast-timer circle {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: rdyrct-toast-timer 3250ms linear forwards;
+  animation-play-state: var(--toast-timer-play-state, running);
+}
+
+@keyframes rdyrct-toast-timer {
+  to {
+    stroke-dashoffset: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rdyrct-toast,
+  .rdyrct-toast-timer circle,
+  .toast-stack {
+    animation: none;
+    transition: none;
+  }
+}
+/* busy-button transition: text blurs then shrinks away while the spinner
+   fades in with a delay. Each direction uses different timings so the
+   forward direction feels sequenced and the reverse (error) is instant. */
+.busy-label {
+  transition:
+    filter 100ms,
+    transform 100ms,
+    opacity 100ms;
+}
+.busy-label[data-busy] {
+  filter: blur(4px);
+  transform: scale(0.75);
+  opacity: 0;
+  transition:
+    filter 150ms,
+    transform 150ms 150ms,
+    opacity 150ms 150ms;
+}
+
+.busy-spinner {
+  opacity: 0;
+  transform: scale(0.5);
+  pointer-events: none;
+  transition:
+    opacity 100ms,
+    transform 100ms;
+}
+.busy-spinner[data-busy] {
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 200ms 200ms,
+    transform 200ms 200ms;
+}
+
+/* Auth card fading out on OTP success, right before the app takes over.
+   The global `html *` rule above only transitions color/background/border,
+   so opacity/transform need their own explicit transition here too. */
+.auth-card-leaving {
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 280ms ease,
+    transform 280ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* !important is the point here, not laziness: a reduced-motion request has
+     to beat the animation rules above it whatever their specificity, and a
+     visitor who asked for less motion gets no exceptions. */
+  /* fallow-ignore-next-line css-selector-complexity */
+  .busy-label,
+  .busy-label[data-busy],
+  .busy-spinner,
+  .busy-spinner[data-busy],
+  .auth-card-leaving {
+    transition: opacity 100ms !important;
+    filter: none !important;
+    transform: none !important;
+  }
+}
+
+/* The hero's anonymous link, arriving. It answers a button somebody pressed
+   a moment earlier, so it rises into place instead of replacing empty space
+   in one frame. Short and once: nothing here loops or waits on scroll. */
+.anon-link-in {
+  animation: anon-link-in 220ms ease-out both;
+}
+
+@keyframes anon-link-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anon-link-in {
+    animation: none;
+  }
+}
+
+/* Clear of a phone's home indicator, and never wider than the screen. */
+.anon-link-bar {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  max-width: calc(100vw - 2rem);
+}
+/* skeleton blocks hold a static shade instead of pulsing */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
